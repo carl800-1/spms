@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>备件仓库管理系统 v2.33</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-logo">📦</span>
+        <span class="brand-name">备件仓库管理 v2.33</span>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-view="dashboard">🏠 仪表盘</button>
+        <button class="nav-item" data-view="parts">📋 备品管理</button>
+        <button class="nav-item" data-view="inbound">⬇️ 入库管理</button>
+        <button class="nav-item" data-view="outbound">⬆️ 出库管理</button>
+        <button class="nav-item" data-view="fixtures">🔩 夹具管理</button>
+        <button class="nav-item" data-view="query">🔎 备件查询</button>
+        <button class="nav-item" data-view="location">🗺️ 库位管理</button>
+        <button class="nav-item" data-view="records">🔍 记录查询</button>
+        <button class="nav-item" data-view="data">💾 数据备份</button>
+      </nav>
+      <div class="sidebar-foot">
+        <small class="foot-version">本地存储 · 无需联网</small>
+        <small class="foot-sign">design by Frank, 2026.7.27</small>
+      </div>
+    </aside>
+
+    <!-- 主区域 -->
+    <main class="main">
+      <header class="topbar">
+        <h1 id="viewTitle">仪表盘</h1>
+        <div class="topbar-right">
+          <span id="topStats" class="top-stats"></span>
+        </div>
+      </header>
+      <section id="content" class="content"><!-- 动态渲染 --></section>
+    </main>
+  </div>
+
+  <!-- 关于 / About（主页右下角） -->
+  <button id="aboutBtn" class="about-btn" onclick="openAbout()">关于 / About</button>
+
+  <!-- 通用模态框 -->
+  <div id="modalOverlay" class="modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="modalTitle">标题</h3>
+        <button class="modal-close" id="modalClose">×</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- 轻提示 -->
+  <div id="toast" class="toast" hidden></div>
+
+  <!-- 打印专用区域（屏幕隐藏，打印时显示） -->
+  <div id="printArea" class="print-area"></div>
+
+  <!-- 离线二维码库（已本地内置，无需联网） -->
+  <script src="js/vendor/qrcode-generator.js"></script>
+  <script src="js/vendor/jsQR.js"></script>
+  <!-- 拼音模糊匹配（本地内置，用于经办人/领用人输入联想） -->
+  <script src="js/pinyin-match.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

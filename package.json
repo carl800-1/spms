@@ -1,0 +1,43 @@
+{
+  "name": "spms",
+  "version": "2.33.0",
+  "description": "备件仓库管理系统 v2.33（Electron 桌面版，本地 JSON 文件存储，数据库置于程序同目录；新增夹具管理模块，支持夹具出库/回库重复流转；分发以版本化文件夹为单位）",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "build": {
+    "appId": "com.spms.warehouse",
+    "productName": "备件仓库管理系统",
+    "electronDist": "node_modules/electron/dist",
+    "files": [
+      "main.js",
+      "preload.js",
+      "store.js",
+      "index.html",
+      "css/**",
+      "js/**",
+      "仓库管理流程图.svg"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "dir",
+        "portable"
+      ],
+      "artifactName": "备件仓库管理系统_v2.33.${ext}"
+    }
+  },
+  "devDependencies": {
+    "app-builder-bin": "^4.2.0",
+    "electron": "^31.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "dependencies": {
+    "pinyin-match": "^1.2.10"
+  }
+}
