@@ -1,0 +1,127 @@
+name: 构建 Windows exe
+
+on:
+  # 推送到主分支或打 v* 标签时构建
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+  # 创建 Release 时构建，并把 exe 作为附件挂到该 Release
+  release:
+    types:
+      - created
+  # 允许在 Actions 页面手动触发
+  workflow_dispatch:
+
+# 上传 Release 附件需要写权限
+permissions:
+  contents: write
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 构建 Windows 可执行文件
+    runs-on: windows-latest
+    timeout-minutes: 40
+
+    env:
+      # Electron / electron-builder 下载二进制时带上 token，避免 GitHub 匿名限流
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci --no-audit --no-fund
+
+      - name: 读取版本号
+        id: meta
+        shell: bash
+        run: |
+          v=$(node -p "require('./package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "当前版本: $v"
+
+      - name: 执行构建
+        run: npm run build
+
+      - name: 校验产物
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Test-Path release)) { throw "未生成 release 目录，构建失败" }
+          Write-Host "== release 目录 =="
+          Get-ChildItem release | ForEach-Object { Write-Host "  $($_.Name)" }
+          $exe = Get-ChildItem -Path release -Filter *.exe -File | Select-Object -First 1
+          if (-not $exe) { throw "release 下未找到 .exe，构建失败" }
+          if ($exe.Length -lt 20MB) { throw "exe 仅 $([math]::Round($exe.Length / 1MB, 1)) MB，疑似打包不完整" }
+          Write-Host "主程序: $($exe.Name) ($([math]::Round($exe.Length / 1MB, 1)) MB)"
+
+      - name: 整理并重命名产物
+        shell: pwsh
+        run: |
+          $version = '${{ steps.meta.outputs.version }}'
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+
+          # 单文件免安装版（portable）：自带 Electron 运行时，拷到任意 Windows 即可直接双击运行
+          $exe = Get-ChildItem -Path release -Filter *.exe -File | Select-Object -First 1
+          Copy-Item $exe.FullName "dist\备件仓库管理系统_v$version-win-x64.exe" -Force
+
+          # 解压版目录（dir 目标）：兼容 v2.11 起的目录分发方式，打包成 zip 便于下载
+          $unpacked = $null
+          if (Test-Path 'release\win-unpacked') {
+            $unpacked = 'release\win-unpacked'
+          } else {
+            $cand = Get-ChildItem release -Directory | Where-Object {
+              Get-ChildItem $_.FullName -Filter *.exe -File -ErrorAction SilentlyContinue
+            } | Select-Object -First 1
+            if ($cand) { $unpacked = $cand.FullName }
+          }
+          if ($unpacked) {
+            Compress-Archive -Path "$unpacked\*" -DestinationPath "dist\备件仓库管理系统_v$version-win-x64-解压版.zip" -Force
+            Write-Host "已压缩解压版目录: $unpacked"
+          }
+
+          Write-Host "== 最终产物 =="
+          Get-ChildItem dist | ForEach-Object { Write-Host "  $($_.Name)  $([math]::Round($_.Length / 1MB, 1)) MB" }
+
+      - name: 冒烟测试（程序能否启动）
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $exe = Get-ChildItem dist -Filter *.exe -File | Select-Object -First 1
+          $proc = Start-Process -FilePath $exe.FullName -PassThru
+          Start-Sleep -Seconds 20
+          if ($proc.HasExited) {
+            Write-Host "::warning::程序在 20 秒内自行退出（退出码 $($proc.ExitCode)），请下载后人工确认"
+          } else {
+            Write-Host "程序持续运行 20 秒未退出，启动正常"
+          }
+          Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+
+      - name: 上传构建产物（可下载）
+        uses: actions/upload-artifact@v4
+        with:
+          name: 备件仓库管理系统-v${{ steps.meta.outputs.version }}-win-x64
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 附加 exe 到 Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
