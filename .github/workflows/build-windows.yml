@@ -1,20 +1,27 @@
 name: 构建 Windows exe
 
 on:
-  # 推送到主分支或打 v* 标签时构建
+  # 推送到主分支：只构建并上传 Artifact（不发版）
+  # 推送 v* 标签：构建 + 自动创建 Release 并把 exe 挂成附件
   push:
     branches:
       - master
     tags:
       - 'v*'
-  # 创建 Release 时构建，并把 exe 作为附件挂到该 Release
-  release:
-    types:
-      - created
-  # 允许在 Actions 页面手动触发
+  # 手动触发：默认只构建；填了 release_tag 才会发版
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: '可选：要发布到的标签（如 v2.33.0），留空则只构建不发版'
+        type: string
+        required: false
+        default: ''
 
-# 上传 Release 附件需要写权限
+# 说明：这里刻意不监听 release: created。
+# 发版由本工作流在「推送 v* 标签」时自动完成；若再监听 release 事件，
+# 会形成「构建 → 创建 Release → 又触发构建」的死循环。
+
+# 创建 Release 并上传附件需要写权限
 permissions:
   contents: write
 
@@ -118,10 +125,17 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: 附加 exe 到 Release
-        if: github.event_name == 'release'
+      # 仅两种情况发版：推送了 v* 标签，或手动触发时填了 release_tag。
+      # 这样避免「构建 → 建 Release → 又触发构建」的死循环。
+      - name: 创建 Release 并上传 exe
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
+          name: 备件仓库管理系统 ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
           files: dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
