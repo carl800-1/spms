@@ -61,7 +61,10 @@ jobs:
           echo "当前版本: $v"
 
       - name: 执行构建
-        run: npm run build
+        # --publish never 必须有：electron-builder 检测到 GH_TOKEN 且当前是 tag 推送时，
+        # 会按默认的 onTagOrDraft 自行发布一份资产，名字取自 package.json 的 name
+        #（实测多出一个 spms-2.33.0.exe）。关掉它，Release 统一由最后一步上传。
+        run: npm run build -- --publish never
 
       - name: 校验产物
         shell: pwsh
@@ -82,8 +85,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist | Out-Null
 
           # 单文件免安装版（portable）：自带 Electron 运行时，拷到任意 Windows 即可直接双击运行
+          # 注意：文件名一律用 ASCII。GitHub Actions 在 Windows runner 上传含中文的文件名/标题时
+          # 中文会被吞掉（实测"备件仓库管理系统"整段丢失），因此统一改用 SPMS 前缀。
           $exe = Get-ChildItem -Path release -Filter *.exe -File | Select-Object -First 1
-          Copy-Item $exe.FullName "dist\备件仓库管理系统_v$version-win-x64.exe" -Force
+          Copy-Item $exe.FullName "dist\SPMS-v$version-win-x64.exe" -Force
 
           # 解压版目录（dir 目标）：兼容 v2.11 起的目录分发方式，打包成 zip 便于下载
           $unpacked = $null
@@ -96,7 +101,7 @@ jobs:
             if ($cand) { $unpacked = $cand.FullName }
           }
           if ($unpacked) {
-            Compress-Archive -Path "$unpacked\*" -DestinationPath "dist\备件仓库管理系统_v$version-win-x64-解压版.zip" -Force
+            Compress-Archive -Path "$unpacked\*" -DestinationPath "dist\SPMS-v$version-win-x64-unpacked.zip" -Force
             Write-Host "已压缩解压版目录: $unpacked"
           }
 
@@ -120,7 +125,7 @@ jobs:
       - name: 上传构建产物（可下载）
         uses: actions/upload-artifact@v4
         with:
-          name: 备件仓库管理系统-v${{ steps.meta.outputs.version }}-win-x64
+          name: SPMS-v${{ steps.meta.outputs.version }}-win-x64
           path: dist/*
           if-no-files-found: error
           retention-days: 30
@@ -132,7 +137,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
-          name: 备件仓库管理系统 ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
+          name: SPMS ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
           files: dist/*
           generate_release_notes: true
           draft: false
