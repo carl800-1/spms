@@ -1,0 +1,18 @@
+# 依赖（544MB，不进版本库，靠 npm install 还原）
+node_modules/
+
+# 构建产物 / 临时目录
+release/
+_asar_check/
+build_v*.log
+*.log
+
+# 可执行文件 / 二进制
+*.exe
+
+# 本地数据（真实库存，不进版本库）
+spms-data.json
+
+# 系统文件
+.DS_Store
+Thumbs.db
