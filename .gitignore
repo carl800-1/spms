@@ -3,6 +3,9 @@ node_modules/
 
 # 构建产物 / 临时目录
 release/
+release_v*/
+build_v*/
+build_v*.py
 _asar_check/
 build_v*.log
 *.log

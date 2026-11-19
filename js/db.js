@@ -7,12 +7,10 @@
  * 对外接口（DB.open / getAll / get / add / put / del / clear / count /
  *  getByIndex / getByRange / addTransaction / addPart / updatePart /
  *  getMeta / setMeta / currentBackend / APP_VERSION）保持不变，
- * 新增夹具管理接口（fixtureAdd / fixtureUpdate / fixtureDel /
- * fixtureGetAll / fixtureAddTransaction / fixtureGetTransactions），
  * app.js 无需修改。
  * ============================================================ */
 const DB = (function () {
-  const APP_VERSION = '2.33';
+  const APP_VERSION = '3.0.4';
   // Electron 运行时，preload.js 会通过 contextBridge 注入 window.api
   const electronApi = (typeof window !== 'undefined' && window.api) ? window.api : null;
 
@@ -38,13 +36,6 @@ const DB = (function () {
       updatePart: (part) => invoke('db-updatePart', part),
       getMeta: (key) => invoke('db-getMeta', key),
       setMeta: (key, value) => invoke('db-setMeta', { key, value }),
-      // 夹具管理
-      fixtureAdd: (fixture) => invoke('fixture-add', fixture),
-      fixtureUpdate: (fixture) => invoke('fixture-update', fixture),
-      fixtureDel: (id) => invoke('fixture-del', id),
-      fixtureGetAll: () => invoke('fixture-getAll'),
-      fixtureAddTransaction: (tx) => invoke('fixture-addTransaction', tx),
-      fixtureGetTransactions: () => invoke('fixture-getTransactions'),
       currentBackend: () => 'electron-file'
     };
   }
@@ -172,7 +163,8 @@ const DB = (function () {
     parts[i] = part; lsSave('parts', parts);
     const record = {
       type: data.type, partId: part.id, partCode: part.code, partName: part.name,
-      quantity: data.quantity, operator: data.operator || '', counterparty: data.counterparty || '',
+      quantity: data.quantity, operator: data.operator || '', operatorNo: data.operatorNo || '',
+      counterparty: data.counterparty || '',
       time: data.time, remark: data.remark || '', createdAt: Date.now()
     };
     lsAdd('transactions', record);
@@ -201,7 +193,8 @@ const DB = (function () {
         ps.put(part);
         const record = {
           type: data.type, partId: part.id, partCode: part.code, partName: part.name,
-          quantity: data.quantity, operator: data.operator || '', counterparty: data.counterparty || '',
+          quantity: data.quantity, operator: data.operator || '', operatorNo: data.operatorNo || '',
+          counterparty: data.counterparty || '',
           time: data.time, remark: data.remark || '', createdAt: Date.now()
         };
         ts.add(record);
@@ -256,60 +249,6 @@ const DB = (function () {
     ? reqToPromise(idbStore('locationAudits', 'readwrite').add(audit))
     : Promise.resolve(lsAdd('locationAudits', audit));
 
-  /* 夹具管理 */
-  const LS_FIXTURES = 'spms_fixtures';
-  const LS_FIX_TX = 'spms_fix_transactions';
-  function lsFixtures() { return lsRead(LS_FIXTURES, []); }
-  function lsFixTransactions() { return lsRead(LS_FIX_TX, []); }
-  const fixtureAdd = (fixture) => lsAdd(LS_FIXTURES, fixture);
-  const fixtureUpdate = (fixture) => lsPut(LS_FIXTURES, fixture);
-  const fixtureDel = (id) => lsDel(LS_FIXTURES, id);
-  const fixtureGetAll = () => Promise.resolve(lsFixtures());
-  const fixtureGetTransactions = () => Promise.resolve(lsFixTransactions());
-  const fixtureAddTransaction = (tx) => {
-    const fixtures = lsFixtures();
-    const i = fixtures.findIndex((f) => f.id === tx.fixtureId);
-    if (i < 0) throw new Error('夹具不存在');
-    const fixture = fixtures[i];
-    if (tx.type === 'out' && fixture.status !== 'stocked' && fixture.status !== 'returned') {
-      throw new Error('夹具当前状态不允许出库');
-    }
-    if (tx.type === 'return' && fixture.status !== 'checked_out') {
-      throw new Error('夹具未处于已出库状态');
-    }
-    const fromStatus = fixture.status;
-    let toStatus = fixture.status;
-    if (tx.type === 'out') {
-      toStatus = 'checked_out';
-      fixture.totalOutCount = (fixture.totalOutCount || 0) + 1;
-    } else if (tx.type === 'return') {
-      toStatus = 'stocked';
-      fixture.totalReturnCount = (fixture.totalReturnCount || 0) + 1;
-    } else if (tx.type === 'repair') {
-      toStatus = 'repair';
-      fixture.repairCount = (fixture.repairCount || 0) + 1;
-    } else if (tx.type === 'retire') {
-      toStatus = 'retired';
-    }
-    fixture.status = toStatus;
-    fixture.updatedAt = Date.now();
-    const record = {
-      id: lsSeq(),
-      fixtureId: fixture.id,
-      fixtureCode: fixture.code,
-      fixtureName: fixture.name,
-      type: tx.type,
-      operator: tx.operator || '',
-      counterparty: tx.counterparty || '',
-      time: tx.time,
-      remark: tx.remark || '',
-      fromStatus, toStatus,
-      createdAt: Date.now()
-    };
-    lsSave(LS_FIXTURES, fixtures);
-    lsAdd(LS_FIX_TX, record);
-  };
-
   async function addPart(part) {
     part.createdAt = Date.now();
     part.updatedAt = Date.now();
@@ -328,7 +267,6 @@ const DB = (function () {
     getByIndex, getByRange, addTransaction, addPart, updatePart,
     getMeta, setMeta,
     getLocationAudits, saveLocationAudit,
-    fixtureAdd, fixtureUpdate, fixtureDel, fixtureGetAll, fixtureAddTransaction, fixtureGetTransactions,
     currentBackend: () => backend
   };
 })();

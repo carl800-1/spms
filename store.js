@@ -23,23 +23,17 @@ function load() {
   try {
     const raw = fs.readFileSync(file(), 'utf8');
     const j = JSON.parse(raw);
-    data = { parts: j.parts || [], transactions: j.transactions || [], meta: j.meta || {}, locationAudits: j.locationAudits || [], fixtures: j.fixtures || [], fixTransactions: j.fixTransactions || [] };
+    data = { parts: j.parts || [], transactions: j.transactions || [], meta: j.meta || {}, locationAudits: j.locationAudits || [] };
     let maxId = 0;
     data.parts.concat(data.transactions).forEach((x) => { if (x && x.id > maxId) maxId = x.id; });
     if (j.locationAudits && j.locationAudits.length) {
       j.locationAudits.forEach((a) => { if (a && a.id > maxId) maxId = a.id; });
     }
-    if (j.fixtures && j.fixtures.length) {
-      j.fixtures.forEach((f) => { if (f && f.id > maxId) maxId = f.id; });
-    }
-    if (j.fixTransactions && j.fixTransactions.length) {
-      j.fixTransactions.forEach((t) => { if (t && t.id > maxId) maxId = t.id; });
-    }
     seq = maxId + 1;
     if (migrateCodes()) save(); // 一次性迁移旧编号 → 4 位纯数字并落盘
     if (migrateLocations()) save(); // 一次性迁移库位 → 连续编号（v2.28）
   } catch (e) {
-    data = { parts: [], transactions: [], meta: {}, locationAudits: [], fixtures: [], fixTransactions: [] };
+    data = { parts: [], transactions: [], meta: {}, locationAudits: [] };
   }
   loaded = true;
 }
@@ -154,7 +148,7 @@ function del(name, id) {
   data[name] = data[name].filter((x) => x.id !== id);
   save();
 }
-function clear(name) { load(); if (name === 'meta') data.meta = {}; else if (name === 'locationAudits') data.locationAudits = []; else if (name === 'fixtures') data.fixtures = []; else if (name === 'fixTransactions') data.fixTransactions = []; else data[name] = []; save(); }
+function clear(name) { load(); if (name === 'meta') data.meta = {}; else if (name === 'locationAudits') data.locationAudits = []; else data[name] = []; save(); }
 function count(name) { load(); if (name === 'meta') return Object.keys(data.meta).length; return (data[name] || []).length; }
 function getByIndex(name, index, value) { load(); if (name === 'meta') return []; return (data[name] || []).filter((x) => x[index] === value); }
 function getByRange(name, index, range) {
@@ -173,7 +167,10 @@ function addTransaction(tx) {
   part.updatedAt = Date.now();
   const record = {
     id: nextId(), type: tx.type, partId: part.id, partCode: part.code, partName: part.name,
-    quantity: tx.quantity, operator: tx.operator || '', counterparty: tx.counterparty || '',
+    quantity: tx.quantity, operator: tx.operator || '',
+    /* 工号：经办人允许输工号，解析后与姓名一并留痕（旧流水无此字段） */
+    operatorNo: tx.operatorNo || '',
+    counterparty: tx.counterparty || '',
     time: tx.time, remark: tx.remark || '', createdAt: Date.now()
   };
   data.transactions.push(record);
@@ -221,104 +218,5 @@ function saveLocationAudit(audit) {
 module.exports = {
   setDataDir, open, getAll, get, add, put, del, clear, count,
   getByIndex, getByRange, addTransaction, addPart, updatePart, getMeta, setMeta,
-  getLocationAudits, saveLocationAudit, migrateLocations,
-  // 夹具管理
-  addFixture: addFixture,
-  updateFixture: updateFixture,
-  delFixture: delFixture,
-  getFixtures: () => getAll('fixtures'),
-  getFixTransactions: () => getAll('fixTransactions'),
-  addFixTransaction: addFixTransaction
+  getLocationAudits, saveLocationAudit, migrateLocations
 };
-
-/* ============================================================
- * 夹具管理数据操作
- * ============================================================ */
-function addFixture(fixture) {
-  load();
-  if (fixture.code && data.fixtures.some((f) => f.code === fixture.code)) {
-    const e = new Error('编号已存在'); e.name = 'ConstraintError'; throw e;
-  }
-  fixture.id = nextId();
-  fixture.qrToken = 'SPMS1|' + fixture.code;
-  fixture.status = 'stocked';
-  fixture.totalOutCount = 0;
-  fixture.totalReturnCount = 0;
-  fixture.repairCount = 0;
-  fixture.createdAt = Date.now();
-  fixture.updatedAt = Date.now();
-  data.fixtures.push(fixture);
-  save();
-  return fixture.id;
-}
-
-function updateFixture(fixture) {
-  load();
-  const i = data.fixtures.findIndex((f) => f.id === fixture.id);
-  if (i < 0) throw new Error('夹具不存在');
-  fixture.updatedAt = Date.now();
-  data.fixtures[i] = fixture;
-  save();
-  return fixture.id;
-}
-
-function delFixture(id) {
-  load();
-  data.fixtures = data.fixtures.filter((f) => f.id !== id);
-  save();
-}
-
-function addFixTransaction(tx) {
-  load();
-  const i = data.fixtures.findIndex((f) => f.id === tx.fixtureId);
-  if (i < 0) throw new Error('夹具不存在');
-  const fixture = data.fixtures[i];
-  
-  // 状态校验
-  if (tx.type === 'out' && fixture.status !== 'stocked' && fixture.status !== 'returned') {
-    throw new Error('夹具当前状态不允许出库');
-  }
-  if (tx.type === 'return' && fixture.status !== 'checked_out') {
-    throw new Error('夹具未处于已出库状态');
-  }
-  
-  const fromStatus = fixture.status;
-  let toStatus = fixture.status;
-  
-  // 更新状态
-  if (tx.type === 'out') {
-    toStatus = 'checked_out';
-    fixture.totalOutCount = (fixture.totalOutCount || 0) + 1;
-  } else if (tx.type === 'return') {
-    toStatus = 'stocked';
-    fixture.totalReturnCount = (fixture.totalReturnCount || 0) + 1;
-  } else if (tx.type === 'repair') {
-    toStatus = 'repair';
-    fixture.repairCount = (fixture.repairCount || 0) + 1;
-  } else if (tx.type === 'retire') {
-    toStatus = 'retired';
-  }
-  
-  fixture.status = toStatus;
-  fixture.updatedAt = Date.now();
-  
-  // 创建流水记录
-  const record = {
-    id: nextId(),
-    fixtureId: fixture.id,
-    fixtureCode: fixture.code,
-    fixtureName: fixture.name,
-    type: tx.type,
-    operator: tx.operator || '',
-    counterparty: tx.counterparty || '',
-    time: tx.time,
-    remark: tx.remark || '',
-    fromStatus: fromStatus,
-    toStatus: toStatus,
-    createdAt: Date.now()
-  };
-  
-  data.fixTransactions.push(record);
-  save();
-  return record.id;
-}

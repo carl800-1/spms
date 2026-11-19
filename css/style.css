@@ -402,61 +402,136 @@ tbody tr.res-row:hover { background: var(--primary-soft, #eef4ff); }
 }
 
 /* ============================================================
- * 夹具管理样式
+ * 系统设置页（参照 E-SOP 服务端系统设置：键值行 + 地址列表）
  * ============================================================ */
-.fixture-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
-}
-.fixture-card {
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.fixture-card:hover {
-  border-color: var(--primary);
-  box-shadow: var(--shadow);
-}
-.fixture-card.selected {
-  border-color: var(--primary);
-  background: var(--primary-soft);
-}
-.fixture-card-header {
+.sys-row {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+  margin: 4px 0 14px;
+}
+.sys-row .kv {
+  display: flex;
   align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.sys-row .kv > span {
+  color: var(--muted);
+  min-width: 62px;
+}
+.sys-row .kv > b {
+  font-weight: 600;
+  word-break: break-all;
+}
+.sys-row .kv > b.path {
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  max-width: 460px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sys-row .kv input {
+  padding: 5px 8px;
+}
+.sys-ok { color: #16a34a; }
+.sys-bad { color: #dc2626; }
+
+.sys-block {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--panel);
+  margin-bottom: 12px;
+}
+.sys-label {
+  font-size: 13px;
+  font-weight: 600;
   margin-bottom: 8px;
 }
-.fixture-code {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--primary);
-}
-.fixture-card-body {
-  margin-bottom: 10px;
-}
-.fixture-name {
-  font-weight: 600;
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-.fixture-spec {
-  color: var(--muted);
+.sys-label em {
+  display: block;
+  font-style: normal;
+  font-weight: 400;
   font-size: 12px;
-  margin-bottom: 6px;
+  color: var(--muted);
+  margin-top: 3px;
 }
-.fixture-meta {
+.lan-list { display: flex; flex-direction: column; gap: 6px; }
+.lan-item {
   display: flex;
-  gap: 12px;
-  font-size: 11px;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #fff;
+  font-size: 13px;
+}
+.lan-item.primary { border-color: var(--primary); background: var(--primary-soft, #eff6ff); }
+.lan-item b {
+  font-family: Consolas, Monaco, monospace;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.lan-item .nic {
+  font-size: 11.5px;
   color: var(--muted);
 }
-.fixture-card-footer {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+.lan-item .spacer { flex: 1 1 auto; }
+.sys-empty {
+  font-size: 12.5px;
+  color: var(--muted);
 }
+.sys-qr {
+  text-align: center;
+  margin: 4px 0 10px;
+}
+.sys-qr canvas {
+  width: 148px;
+  height: 148px;
+  image-rendering: pixelated;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 4px;
+}
+.sys-qr-tip {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.sys-tip {
+  font-size: 12.5px;
+  line-height: 1.8;
+  color: var(--muted);
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--primary);
+  background: var(--panel);
+  border-radius: 0 6px 6px 0;
+}
+
+/* ---------- 经办人联想：工号淡色后缀 ---------- */
+.op-ac-item .op-no {
+  margin-left: 8px;
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-family: Consolas, Monaco, monospace;
+}
+
+/* ---------- 员工档案（系统设置页） ---------- */
+.staff-table td, .staff-table th { padding: 7px 10px; }
+.staff-table .staff-no {
+  font-family: Consolas, Monaco, monospace;
+  font-size: 13px;
+  letter-spacing: .3px;
+}
+.staff-table .staff-ops { white-space: nowrap; }
+.staff-table .staff-ops .btn { padding: 3px 9px; font-size: 12px; }
+.btn.sm.ghost.danger { background: transparent; color: var(--danger); border-color: #fecaca; }
+.btn.sm.ghost.danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }

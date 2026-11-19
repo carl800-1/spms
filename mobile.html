@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#185FA5" />
+  <title>备件仓库 · 移动端</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/mobile.css" />
+</head>
+<body>
+
+  <!-- PIN 登录 -->
+  <div id="login" class="login-mask">
+    <div class="login-box">
+      <div class="login-title">备件仓库 · 移动端</div>
+      <div class="login-tip">请输入 4 位 PIN<br />（电脑端 <b>关于 / About</b> 面板可查看）</div>
+      <input id="pin" class="pin" type="tel" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••" />
+      <button id="loginBtn" class="btn-primary">进入</button>
+      <div id="loginErr" class="login-err"></div>
+      <div id="loginVer" class="login-ver"></div>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="app" class="app" hidden>
+    <header class="topbar">
+      <span class="topbar-title">备件仓库</span>
+      <span id="conn" class="conn">● 已连接</span>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-type="out">出库</button>
+      <button class="tab" data-type="in">入库</button>
+    </nav>
+
+    <section class="scan-wrap">
+      <input id="scan" class="scan" placeholder="扫码 / 输入编号或名称" autocomplete="off" autocapitalize="off" spellcheck="false" />
+      <div id="scanHint" class="scan-hint">扫码枪扫一下自动检索，回车也可查询</div>
+    </section>
+
+    <section id="card" class="card" hidden>
+      <div class="card-head">
+        <span id="pName" class="card-name">—</span>
+        <span id="pCode" class="card-code">—</span>
+      </div>
+      <div id="pSpec" class="card-sub">—</div>
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">当前库存</div>
+          <div id="pStock" class="metric-value">0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">安全库存</div>
+          <div id="pSafe" class="metric-value">0</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="results" class="results" hidden></section>
+    <div id="empty" class="empty">等待扫码…</div>
+
+    <section class="form">
+      <div class="row">
+        <div class="field field-qty">
+          <label>数量</label>
+          <div class="qty-box">
+            <button id="qtyMinus" class="qty-btn" type="button">−</button>
+            <input id="qty" type="number" inputmode="decimal" min="0.0001" step="any" value="1" />
+            <button id="qtyPlus" class="qty-btn" type="button">+</button>
+          </div>
+        </div>
+        <div class="field field-op">
+          <label id="opLabel">领用人 *</label>
+          <input id="operator" list="opList" placeholder="姓名或工号" autocomplete="off" />
+          <datalist id="opList"></datalist>
+          <div id="opHint" class="op-hint" hidden></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>备注（可选）</label>
+        <input id="remark" placeholder="用途 / 备注" autocomplete="off" />
+      </div>
+    </section>
+
+    <div class="submit-bar">
+      <button id="submit" class="btn-primary" disabled>确认出库</button>
+    </div>
+
+    <section class="recent">
+      <div class="recent-title">最近记录</div>
+      <div id="recentList" class="recent-list"></div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="js/mobile.js"></script>
+</body>
+</html>

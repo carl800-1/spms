@@ -1,0 +1,19 @@
+{
+  "name": "备件仓库管理系统 · 移动端",
+  "short_name": "备件仓库",
+  "description": "PDA 扫码出入库",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f1f5f9",
+  "theme_color": "#185FA5",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

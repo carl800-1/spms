@@ -102,14 +102,12 @@
   });
 
   /* ---------------- 全局状态 ---------------- */
-  const state = { view: 'dashboard', parts: [], transactions: [], locFilter: '', scanResolve: null, qrPart: null, operators: [], customCategories: [], customUnits: [], stSelectedId: 0, qySelectedId: 0, qyQuery: '', locationAudits: [], fixtures: [], fixTransactions: [], fixSelectedId: 0 };
+  const state = { view: 'dashboard', parts: [], transactions: [], locFilter: '', scanResolve: null, qrPart: null, operators: [], staffs: [], customCategories: [], customUnits: [], stSelectedId: 0, qySelectedId: 0, qyQuery: '', locationAudits: [] };
 
   /* ---------------- 数据加载 ---------------- */
   async function reloadAll() {
     state.parts = await DB.getAll('parts');
     state.transactions = await DB.getAll('transactions');
-    state.fixtures = await DB.fixtureGetAll();
-    state.fixTransactions = await DB.fixtureGetTransactions();
   }
 
   /* ---------------- 库存状态 ---------------- */
@@ -190,12 +188,12 @@
   const VIEW_TITLES = {
     dashboard: '仪表盘', parts: '备品管理', inbound: '入库管理', outbound: '出库管理',
     query: '备件查询', location: '库位管理', records: '记录查询', data: '数据备份与恢复',
-    fixtures: '夹具管理'
+    settings: '系统设置'
   };
   const RENDERERS = {
     dashboard: renderDashboard, parts: renderParts, inbound: renderInbound,
     outbound: renderOutbound, query: renderQuery, location: renderLocation,
-    records: renderRecords, data: renderData, fixtures: renderFixtures
+    records: renderRecords, data: renderData, settings: renderSettings
   };
 
   function showView(name) {
@@ -210,9 +208,8 @@
   function renderTopStats() {
     const warn = state.parts.filter((p) => p.safeStock > 0 && p.stock < p.safeStock).length;
     const out = state.parts.filter((p) => p.stock <= 0).length;
-    const fixOut = state.fixtures.filter((f) => f.status === 'checked_out').length;
     $('#topStats').innerHTML =
-      `备品种类 <b>${state.parts.length}</b> ｜ 预警 <b style="color:${warn ? 'var(--warn)' : ''}">${warn}</b> ｜ 缺货 <b style="color:${out ? 'var(--danger)' : ''}">${out}</b> ｜ 夹具在库 <b>${state.fixtures.filter((f) => f.status === 'stocked').length}</b> ｜ 夹具已出库 <b style="color:var(--warn)">${fixOut}</b>`;
+      `备品种类 <b>${state.parts.length}</b> ｜ 预警 <b style="color:${warn ? 'var(--warn)' : ''}">${warn}</b> ｜ 缺货 <b style="color:${out ? 'var(--danger)' : ''}">${out}</b>`;
   }
 
   /* ============================================================
@@ -266,7 +263,7 @@
             ${recent.map((t) => `<tr>
               <td><span class="badge ${t.type === 'in' ? 'ok' : 'muted'}">${t.type === 'in' ? '入库' : '出库'}</span></td>
               <td>${esc(t.partCode)}</td><td>${esc(t.partName)}</td><td>${t.quantity}</td>
-              <td>${esc(t.operator)}</td><td>${fmtTime(t.time)}</td></tr>`).join('')}
+              <td>${esc(opLabel(t))}</td><td>${fmtTime(t.time)}</td></tr>`).join('')}
           </tbody>
         </table></div>` : '<div class="empty">暂无出入库记录</div>'}
       </div>`;
@@ -532,12 +529,54 @@
     openModal(id ? '编辑备品' : '新增备品', partFormHtml(p));
   };
 
-  /* 关于 / About 面板（滚动布局 + 全部历史版本变更记录） */
+  /* 关于 / About 面板（滚动布局 + 全部历史版本变更记录）
+   * 移动端访问设置已移至左侧「⚙️ 系统设置」页（参照 E-SOP 服务端系统设置），此处只留入口提示。 */
   function aboutHtml() {
+    const mb = `
+      <h3 class="about-h">系统设置</h3>
+      <p class="muted small" style="margin:0 0 10px">PDA 访问地址、PIN、端口与二维码，请到左侧「<b>⚙️ 系统设置</b>」页查看与调整。</p>`;
     return `
       <div class="about-panel">
         <div class="about-scroll">
+          ${mb}
           <h3 class="about-h">变更日记</h3>
+          <h4 class="about-ver">v3.0.4</h4>
+          <ul class="about-list">
+            <li><strong>【新增】端口放行自动化</strong>：系统设置页新增「端口放行」状态行 + 「🔓 一键放行」按钮——点击后提权（UAC 确认）为 PDA 端口添加 Windows 防火墙入站规则，并自动复核是否生效；UAC 点「否」如实提示。放行规则覆盖所有网络类型（含现场常被识别为「公用网络」的 Wi-Fi）。</li>
+            <li><strong>【新增】独立批处理</strong>：程序目录附带 <code>open-pda-port.bat</code>，右键管理员运行即可放行（可带自定义端口参数），供一键放行被公司策略拦截时手动使用。</li>
+            <li><strong>【新增】测试端口可配置</strong>：移动端服务支持 <code>SPMS_MOBILE_PORT</code> 环境变量覆盖默认 8765，便于多实例与自动化测试避让端口占用。</li>
+            <li>版本号升级至 <strong>3.0.4</strong>。</li>
+          </ul>
+          <h4 class="about-ver">v3.0.3</h4>
+          <ul class="about-list">
+            <li><strong>【调整】界面文案统一为 PDA</strong>：将界面文案中的设备表述统一为 PDA——关于面板、系统设置页、访问地址二维码提示、变更日记及 PDA 端描述中的并列表述全部收敛为「PDA」，避免现场误用个人设备操作。</li>
+            <li>版本号升级至 <strong>3.0.3</strong>。</li>
+          </ul>
+          <h4 class="about-ver">v3.0.2</h4>
+          <ul class="about-list">
+            <li><strong>【新增】员工档案（工号 ↔ 姓名）</strong>：系统设置页新增「员工档案」卡片，可手工添加 / 编辑 / 删除，并支持 CSV 导入（两列：工号,姓名，自动跳过表头、重复工号、空行）、导出与模板下载。导入为「同工号更新姓名、保留未在文件中的档案」，跳过行会列出原因。</li>
+            <li><strong>【新增】经办人可直接输入工号</strong>：入库「经办人」、出库「领用人」输入框支持直接输工号（或扫工牌上含工号的条码），系统按档案自动带出姓名；流水同时记录姓名（<code>operator</code>）与工号（<code>operatorNo</code>），报表显示为 <code>张三(10086)</code>，旧流水无工号时照旧只显示姓名。</li>
+            <li><strong>【优化】经办人联想合并档案</strong>：候选下拉同时按工号、姓名、拼音匹配，候选右侧淡色显示工号；同名不同工号的两人都会保留（确实是两个人），同名多人时输姓名不作猜测。</li>
+            <li><strong>【优化】记录查询支持工号</strong>：记录查询的经办人条件同时匹配姓名与工号，输 10086 也能查到此人的全部记录；导出 CSV 的经办人列同为「姓名(工号)」。</li>
+            <li><strong>【优化】移动端同步支持工号</strong>：移动端新增 <code>/api/staffs</code> 接口，提交时服务端解析工号；输入工号后离开输入框会自动换成姓名并在下方显示工号，最近记录同样显示「姓名(工号)」。</li>
+            <li><strong>【测试】新增 <code>test_staff.js</code></strong>（65 项：归一化 / 查找 / 解析 / 占用判定 / CSV 解析与生成），<code>test_mobile_api.js</code> 扩充至 44 项（工号提交、姓名补工号、未建档原样保留、落盘校验）。</li>
+            <li>版本号升级至 <strong>3.0.2</strong>。</li>
+          </ul>
+          <h4 class="about-ver">v3.0.1</h4>
+          <ul class="about-list">
+            <li><strong>【新增】侧边栏「⚙️ 系统设置」页</strong>（位于「数据备份」下方）：参照 E-SOP 服务端系统设置布局，卡片 + 键值行 + 局域网地址列表 + 提示条。</li>
+            <li><strong>【调整】移动端访问设置迁至系统设置页</strong>：访问地址、服务状态、端口、PIN、二维码集中一页；地址按网卡逐条列出并带「复制」按钮，首张标「默认」并高亮，多网卡时提示虚拟网卡陷阱。关于面板只保留入口提示，不再重复承载设置。</li>
+            <li><strong>【新增】本机信息</strong>：版本号、数据文件完整路径，并可一键「打开目录」。</li>
+            <li>版本号升级至 <strong>3.0.1</strong>。</li>
+          </ul>
+          <h4 class="about-ver">v3.0</h4>
+          <ul class="about-list">
+            <li><strong>【新增】PDA 扫码出入库</strong>：主进程内置局域网 HTTP 服务（默认端口 8765），PDA 浏览器打开即用，无需安装 App；支持出库 / 入库切换、扫码自动检索、库存实时显示、数量与经办人录入、最近记录查看。移动端提交后桌面端自动刷新。</li>
+            <li><strong>【新增】PIN 鉴权与访问入口</strong>：「关于 / About」面板新增访问地址二维码、4 位 PIN 修改、端口调整与重启服务。</li>
+            <li><strong>【优化】扫码解析逻辑抽为共享模块</strong>：新增 js/scan-core.js，由桌面端与移动端 API 共用，避免两处规则漂移。</li>
+            <li><strong>【移除】夹具管理模块</strong>：夹具（工装）管理属独立项目，v2.33 误并入本系统，v3.0 起从本项目彻底移除——包括侧边栏入口、夹具页面与卡片渲染、夹具出库/回库/报废逻辑、夹具数据读写接口（主进程 IPC、preload、双模式数据层）及配套样式。备件/出入库/库存/库位/盘点/记录/标签打印功能不受影响。</li>
+            <li>版本号升级至 <strong>3.0</strong>（局部迭代号 2.34 未对外发布，直接并入 3.0）。</li>
+          </ul>
           <h4 class="about-ver">v2.32</h4>
           <ul class="about-list">
             <li><strong>【优化】库位总览改为十列网格（三行可视）</strong>：库位卡片网格由 12 列等宽改为 <b>10 列等宽</b>布局（grid-template-columns: repeat(10,1fr)），其余保持三行可视、内容区域可上下滑动垂直浏览全部库位（共 115 个），卡片随容器宽度自适应缩放、按行列规则整齐排列；卡片仍仅显示库位编号（如 A1-03-02），悬停可查看件数与预警信息；点选库位后纵向滚动位置保持不变。</li>
@@ -736,6 +775,32 @@
   }
   window.openAbout = function () { openModal('关于 / About', aboutHtml()); };
 
+  /* 系统设置页：修改移动端 PIN */
+  window.saveMobilePin = async function () {
+    const el = document.getElementById('sysPinInput');
+    const pin = ((el && el.value) || '').trim();
+    if (!/^\d{4}$/.test(pin)) { toast('PIN 必须是 4 位数字', 'err'); return; }
+    try {
+      const r = await window.api.mobileSetPin(pin);
+      if (!r || !r.ok) { toast('保存失败：' + ((r && r.error) || '未知错误'), 'err'); return; }
+      toast('PIN 已更新，PDA 需重新登录', 'ok');
+      loadSettings();
+    } catch (e) { toast('保存失败：' + e.message, 'err'); }
+  };
+
+  /* 系统设置页：更换端口并重启移动端服务 */
+  window.restartMobile = async function () {
+    const el = document.getElementById('sysPortInput');
+    const port = Number(((el && el.value) || '').trim());
+    if (!(port >= 1024 && port <= 65535)) { toast('端口需在 1024–65535 之间', 'err'); return; }
+    try {
+      const r = await window.api.mobileRestart(port);
+      if (!r || !r.ok) { toast('重启失败', 'err'); return; }
+      toast('服务已重启：' + r.status.url, 'ok');
+      loadSettings();
+    } catch (e) { toast('重启失败：' + e.message, 'err'); }
+  };
+
   /* 取下一个可用的 4 位纯数字编号：当前最大 4 位数字 +1，最小 1001（顺序分配，无随机跳号） */
   function nextPartCode() {
     let max = 1000;
@@ -913,7 +978,7 @@
             </div>
           </div>
           <div class="field"><label>入库数量 *</label><input id="in_qty" type="number" min="0.0001" step="any" placeholder="如 50"></div>
-          <div class="field op-field"><label>经办人 *</label><input id="in_op" placeholder="录入人（支持拼音模糊查找）" autocomplete="off" oninput="operatorSuggest(this)" onfocus="operatorSuggest(this)"><div class="op-ac" id="in_op_ac" style="display:none"></div></div>
+          <div class="field op-field"><label>经办人 *</label><input id="in_op" placeholder="姓名或工号（支持拼音模糊查找）" autocomplete="off" oninput="operatorSuggest(this)" onfocus="operatorSuggest(this)"><div class="op-ac" id="in_op_ac" style="display:none"></div></div>
           <div class="field"><label>供应商</label><input id="in_sup" placeholder="供货单位"></div>
           <div class="field"><label>入库时间</label><input id="in_time" type="datetime-local" value="${nowInput()}"></div>
           <div class="field"><label>备注或用途</label><input id="in_remark"></div>
@@ -937,13 +1002,16 @@
     const part = resolveInOutPart('in');
     if (!part) { toast('请先在检索栏选择/输入正确的备品（编号 / 名称 / 规格 / 库位 任一即可，多匹配时请点选列表项）', 'err'); return; }
     const qty = num($('#in_qty').value);
-    const op = $('#in_op').value.trim();
+    const rawOp = $('#in_op').value.trim();
     if (qty <= 0) { toast('入库数量必须大于 0', 'err'); return; }
-    if (!op) { toast('请填写经办人', 'err'); return; }
+    if (!rawOp) { toast('请填写经办人（姓名或工号）', 'err'); return; }
+    /* 允许直接输工号：解析成「姓名 + 工号」，姓名照旧写入 operator 以兼容旧报表 */
+    const who = StaffCore.resolveOperator(state.staffs, rawOp);
+    const op = who.name;
     rememberOperator(op);
     try {
       await DB.addTransaction({
-        type: 'in', partId: part.id, quantity: qty, operator: op,
+        type: 'in', partId: part.id, quantity: qty, operator: op, operatorNo: who.no,
         counterparty: $('#in_sup').value.trim(),
         time: inputToMs($('#in_time').value),
         remark: $('#in_remark').value.trim()
@@ -959,10 +1027,34 @@
    * 经办人 / 领用人 输入联想（拼音模糊匹配 + 下拉选择）
    * ============================================================ */
   function escAttr(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-  function operatorMatch(name, q) {
+  /* 流水经办人展示串：张三(10086)；旧流水无工号时只显示姓名 */
+  function opLabel(tx) { return StaffCore.opLabel(tx); }
+  /* 候选池：员工档案优先（带工号），再补历史里没有建档的姓名。
+   * 同名不同工号的两人都会保留——他们确实是两个人。 */
+  function operatorCandidates() {
+    const out = [];
+    const names = new Set();
+    (state.staffs || []).forEach((s) => {
+      if (!s || !s.name) return;
+      out.push({ name: s.name, no: s.no || '' });
+      names.add(s.name.toLowerCase());
+    });
+    (state.operators || []).forEach((n) => {
+      if (!n) return;
+      if (names.has(String(n).toLowerCase())) return;
+      out.push({ name: n, no: '' });
+      names.add(String(n).toLowerCase());
+    });
+    return out;
+  }
+  /* 匹配：工号包含 / 姓名包含 / 姓名拼音（全拼或首字母） */
+  function operatorMatch(cand, q) {
     q = (q || '').trim().toLowerCase();
     if (!q) return true;
-    if (name.toLowerCase().includes(q)) return true;        // 中文 / 直接子串匹配
+    const name = String(cand.name || '');
+    const no = String(cand.no || '');
+    if (no && no.toLowerCase().includes(q)) return true;     // 输工号
+    if (name.toLowerCase().includes(q)) return true;         // 中文 / 直接子串匹配
     const pm = window.PinyinMatch;
     if (pm && typeof pm.match === 'function') {              // 拼音（全拼 / 首字母）模糊匹配
       try { if (pm.match(name, q) !== false) return true; } catch (e) {}
@@ -975,16 +1067,21 @@
     if (!box) return;
     if (input.isComposing) return; // 中文输入法组合中不打断、不闪候选
     const q = input.value;
-    const all = state.operators || [];
-    const matches = (q.trim() ? all.filter((n) => operatorMatch(n, q)) : all).slice(0, 50);
+    const all = operatorCandidates();
+    const matches = (q.trim() ? all.filter((c) => operatorMatch(c, q)) : all).slice(0, 50);
     if (!matches.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
-    box.innerHTML = matches.map((n) => `<div class="op-ac-item" data-name="${escAttr(n)}">${esc(n)}</div>`).join('');
-    box.onclick = (e) => { const it = e.target.closest('.op-ac-item'); if (it) operatorPick(it.getAttribute('data-name'), id); };
+    box.innerHTML = matches.map((c) => (
+      `<div class="op-ac-item" data-name="${escAttr(c.name)}" data-no="${escAttr(c.no)}">${esc(c.name)}${c.no ? `<em class="op-no">${esc(c.no)}</em>` : ''}</div>`
+    )).join('');
+    box.onclick = (e) => {
+      const it = e.target.closest('.op-ac-item');
+      if (it) operatorPick(it.getAttribute('data-name'), id, it.getAttribute('data-no') || '');
+    };
     box.style.display = 'block';
   };
-  window.operatorPick = function (name, inputId) {
+  window.operatorPick = function (name, inputId, no) {
     const inp = document.getElementById(inputId);
-    if (inp) inp.value = name;
+    if (inp) { inp.value = name; inp.setAttribute('data-op-no', no || ''); }
     const box = document.getElementById(inputId + '_ac');
     if (box) box.style.display = 'none';
     if (inp) inp.focus();
@@ -1034,7 +1131,7 @@
             </div>
           </div>
           <div class="field"><label>出库数量 *</label><input id="out_qty" type="number" min="0.0001" step="any" placeholder="如 5"></div>
-          <div class="field op-field"><label>领用人 *</label><input id="out_op" placeholder="领用人（支持拼音模糊查找）" autocomplete="off" oninput="operatorSuggest(this)" onfocus="operatorSuggest(this)"><div class="op-ac" id="out_op_ac" style="display:none"></div></div>
+          <div class="field op-field"><label>领用人 *</label><input id="out_op" placeholder="姓名或工号（支持拼音模糊查找）" autocomplete="off" oninput="operatorSuggest(this)" onfocus="operatorSuggest(this)"><div class="op-ac" id="out_op_ac" style="display:none"></div></div>
           <div class="field"><label>出库时间</label><input id="out_time" type="datetime-local" value="${nowInput()}"></div>
           <div class="field"><label>备注或用途</label><input id="out_remark"></div>
         </div>
@@ -1057,14 +1154,16 @@
     const part = resolveInOutPart('out');
     if (!part) { toast('请先在检索栏选择/输入正确的备品（编号 / 名称 / 规格 / 库位 任一即可，多匹配时请点选列表项）', 'err'); return; }
     const qty = num($('#out_qty').value);
-    const op = $('#out_op').value.trim();
+    const rawOp = $('#out_op').value.trim();
     if (qty <= 0) { toast('出库数量必须大于 0', 'err'); return; }
-    if (!op) { toast('请填写领用人', 'err'); return; }
+    if (!rawOp) { toast('请填写领用人（姓名或工号）', 'err'); return; }
     if (part.stock < qty) { toast(`库存不足：当前 ${part.stock}，需 ${qty}`, 'err'); return; }
+    const who = StaffCore.resolveOperator(state.staffs, rawOp);
+    const op = who.name;
     rememberOperator(op);
     try {
       await DB.addTransaction({
-        type: 'out', partId: part.id, quantity: qty, operator: op,
+        type: 'out', partId: part.id, quantity: qty, operator: op, operatorNo: who.no,
         counterparty: '',
         time: inputToMs($('#out_time').value),
         remark: $('#out_remark').value.trim()
@@ -1295,7 +1394,8 @@
     let list = state.transactions.slice();
     if (type !== 'all') list = list.filter((t) => t.type === type);
     if (name) list = list.filter((t) => (t.partName + t.partCode).toLowerCase().includes(name));
-    if (op) list = list.filter((t) => t.operator.toLowerCase().includes(op));
+    /* 经办人检索同时匹配姓名与工号，输 10086 也能查到这个人的记录 */
+    if (op) list = list.filter((t) => ((t.operator || '') + ' ' + (t.operatorNo || '')).toLowerCase().includes(op));
     if (start != null) list = list.filter((t) => t.time >= start);
     if (end != null) list = list.filter((t) => t.time <= end);
     list.sort((a, b) => b.time - a.time);
@@ -1313,7 +1413,7 @@
             <button type="button" class="btn ghost sm" onclick="scanForCode('r_name', renderRecordsResults)" title="扫码识别备品编号">📷</button>
           </div>
         </div>
-        <div class="field"><label>经办人</label><input id="r_op" placeholder="经办人" autocomplete="off"></div>
+        <div class="field"><label>经办人</label><input id="r_op" placeholder="姓名或工号" autocomplete="off"></div>
         <div class="field"><label>开始日期</label><input id="r_start" type="date"></div>
         <div class="field"><label>结束日期</label><input id="r_end" type="date"></div>
         <div class="spacer"></div>
@@ -1345,7 +1445,7 @@
                 <td>${esc(t.partCode)}</td><td>${esc(t.partName)}</td>
                 <td>${t.type === 'in' ? '+' : '-'}${t.quantity}</td>
                 <td>${esc(part ? part.unit : '')}</td>
-                <td>${esc(t.operator)}</td><td>${esc(t.counterparty)}</td>
+                <td>${esc(opLabel(t))}</td><td>${esc(t.counterparty)}</td>
                 <td>${fmtTime(t.time)}</td><td>${esc(t.remark)}</td></tr>`;
             }).join('') : `<tr><td colspan="9" class="empty">无匹配记录</td></tr>`}
           </tbody>
@@ -1359,7 +1459,7 @@
     const list = queryRecords();
     const rows = list.map((t) => {
       const part = state.parts.find((p) => p.id === t.partId);
-      return [t.type === 'in' ? '入库' : '出库', t.partCode, t.partName, t.quantity, part ? part.unit : '', t.operator, t.counterparty, fmtTime(t.time), t.remark];
+      return [t.type === 'in' ? '入库' : '出库', t.partCode, t.partName, t.quantity, part ? part.unit : '', opLabel(t), t.counterparty, fmtTime(t.time), t.remark];
     });
     download('出入库记录_' + stamp() + '.csv', toCSV(['类型', '编号', '名称', '数量', '单位', '经办人', '对方', '时间', '备注或用途'], rows), 'text/csv;charset=utf-8');
     toast('已导出 ' + list.length + ' 条', 'ok');
@@ -1387,11 +1487,352 @@
     $('#content').innerHTML = html;
   }
 
+  /* ============================================================
+   * 系统设置（侧边栏「数据备份」下方）
+   * 参照 E-SOP 服务端「系统设置」页：卡片 + 键值行 + 局域网地址列表（可一键复制）
+   * ============================================================ */
+  function renderSettings() {
+    const html = `
+      <div class="panel">
+        <div class="panel-title">
+          PDA 移动端访问
+          <span class="panel-actions">
+            <button class="btn sm ghost" onclick="loadSettings()">↻ 刷新</button>
+          </span>
+        </div>
+        <p class="muted small" style="margin:0 0 10px">PDA 与这台电脑连同一 Wi-Fi，用浏览器打开下面任一地址即可扫码办理出入库，<b>无需安装 App</b>。首次打开需输入 PIN。</p>
+
+        <div class="sys-row">
+          <div class="kv"><span>服务状态</span><b id="sysStatus">—</b></div>
+          <div class="kv"><span>端口</span>
+            <input id="sysPortInput" maxlength="5" inputmode="numeric" style="width:76px" />
+            <button class="btn sm" onclick="restartMobile()">重启服务</button>
+          </div>
+          <div class="kv"><span>访问 PIN</span>
+            <input id="sysPinInput" maxlength="4" inputmode="numeric" style="width:76px" />
+            <button class="btn sm" onclick="saveMobilePin()">保存 PIN</button>
+          </div>
+          <div class="kv"><span>端口放行</span>
+            <b id="sysPortRule">检查中…</b>
+            <button class="btn sm ghost" onclick="checkPortRule()">↻ 检查</button>
+            <button class="btn sm" onclick="openPortFirewall()">🔓 一键放行</button>
+          </div>
+        </div>
+
+        <div class="sys-block">
+          <div class="sys-label">访问地址
+            <em>多张网卡时选名字对得上现场的那张；带 vEthernet / VMnet / WSL 的是虚拟网卡，PDA 连不上</em>
+          </div>
+          <div id="sysLan"><div class="sys-empty">读取中…</div></div>
+        </div>
+
+        <div class="sys-qr">
+          <canvas id="sysQR"></canvas>
+          <div class="sys-qr-tip">PDA 扫这里直接打开（用的是首张网卡地址）</div>
+        </div>
+
+        <p class="sys-tip">① 首次启动若弹出 Windows 防火墙提示，务必点「<b>允许访问</b>」，否则 PDA 连不上；
+          ② 电脑 IP 变化时地址会跟着变，以本页显示为准，建议在路由器里给这台机做地址保留；
+          ③ 电脑需保持开机且本程序运行中；
+          ④ 若「一键放行」被公司策略拦截，可右键管理员运行程序目录下的 <code>open-pda-port.bat</code>（可带端口号参数）手动放行。</p>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">本机信息</div>
+        <div class="sys-row">
+          <div class="kv"><span>版本</span><b id="sysVer">—</b></div>
+          <div class="kv"><span>数据文件</span><b id="sysData" class="path">—</b>
+            <button class="btn sm" onclick="openDataDirNow()">打开目录</button></div>
+        </div>
+        <p class="muted small" style="margin:8px 0 0">数据库为本程序所在目录下的 <code>spms-data.json</code>；整体拷贝程序文件夹即可连同数据一起搬走。</p>
+      </div>
+
+      <div class="panel" style="margin-bottom:0">
+        <div class="panel-title">
+          员工档案（工号 ↔ 姓名）
+          <span class="panel-actions">
+            <button class="btn sm ghost" onclick="downloadStaffTemplate()">下载模板</button>
+            <button class="btn sm ghost" onclick="exportStaffCSV()">导出 CSV</button>
+            <button class="btn sm" onclick="importStaffCSV()">导入 CSV</button>
+          </span>
+        </div>
+        <p class="muted small" style="margin:0 0 10px">建好档案后，出入库的「经办人 / 领用人」可以<b>直接输工号</b>（或扫工牌上含工号的条码），系统自动带出姓名；流水同时记录姓名与工号，报表显示为 <code>张三(10086)</code>。</p>
+
+        <div class="sys-row">
+          <div class="kv"><span>工号</span><input id="staffNo" maxlength="20" placeholder="如 10086" style="width:120px" /></div>
+          <div class="kv"><span>姓名</span><input id="staffName" maxlength="20" placeholder="如 张三" style="width:120px" /></div>
+          <button class="btn sm" id="staffSaveBtn" onclick="saveStaff()">添加</button>
+          <button class="btn sm ghost" id="staffCancelBtn" style="display:none" onclick="cancelStaffEdit()">取消</button>
+          <div class="kv"><span>搜索</span><input id="staffQ" placeholder="工号或姓名" autocomplete="off" style="width:140px" oninput="renderStaffList()" /></div>
+        </div>
+
+        <div id="staffList"></div>
+        <input type="file" id="staffFile" accept=".csv,text/csv" style="display:none" onchange="onStaffFile(event)" />
+      </div>`;
+    $('#content').innerHTML = html;
+    loadSettings();
+    renderStaffList();
+  }
+
+  /* 读取并填充系统设置页（移动端状态 + 本机信息） */
+  function loadSettings() {
+    return (async () => {
+      let st = null;
+      try { if (window.api && window.api.mobileStatus) st = await window.api.mobileStatus(); } catch (e) { st = null; }
+
+      const stEl = $('#sysStatus');
+      if (stEl) {
+        if (st && st.running) stEl.innerHTML = `<span class="sys-ok">运行中</span>`;
+        else stEl.innerHTML = `<span class="sys-bad">未启动</span>${st && st.error ? '：' + esc(st.error) : ''}`;
+      }
+
+      const portEl = $('#sysPortInput');
+      if (portEl && st) portEl.value = st.port;
+      const pinEl = $('#sysPinInput');
+      if (pinEl && st) pinEl.value = st.pin;
+
+      /* 端口放行状态（只读查询，失败不影响设置页其它内容） */
+      try { if (window.checkPortRule) window.checkPortRule(); } catch (e) { /* ignore */ }
+
+      const lanEl = $('#sysLan');
+      if (lanEl) {
+        const lan = (st && st.lan) || [];
+        lanEl.innerHTML = lan.length
+          ? '<div class="lan-list">' + lan.map((it, i) => (
+            `<div class="lan-item${i === 0 ? ' primary' : ''}">
+               <b>${esc(it.url)}</b>
+               <span class="nic">${esc(it.name || '网卡')}${i === 0 ? ' · 默认' : ''}</span>
+               <div class="spacer"></div>
+               <button class="btn sm" onclick="sysCopyUrl('${esc(it.url)}')">复制</button>
+             </div>`)).join('') + '</div>'
+          : '<div class="sys-empty">没有检测到局域网地址，请确认网线已插 / Wi-Fi 已连接</div>';
+      }
+
+      if (st && st.url) {
+        const cv = $('#sysQR');
+        if (cv) { try { drawQR(cv, st.url, { scale: 6, margin: 3 }); } catch (e) { /* 二维码失败不影响设置页 */ } }
+      }
+
+      try {
+        if (window.api && window.api.sysInfo) {
+          const info = await window.api.sysInfo();
+          const ver = $('#sysVer');
+          if (ver) ver.textContent = 'v' + (info.version || DB.APP_VERSION);
+          const dp = $('#sysData');
+          if (dp) {
+            dp.textContent = info.dataFile || '—';
+            dp.title = info.dataFile || '';
+          }
+        }
+      } catch (e) { /* 拿不到本机信息时保留占位符 */ }
+    })();
+  }
+  window.loadSettings = loadSettings;
+  window.sysCopyUrl = async function (url) {
+    try { await navigator.clipboard.writeText(url); toast('已复制 ' + url, 'ok'); }
+    catch (e) { toast('复制失败，请手动选中地址复制', 'err'); }
+  };
+  window.openDataDirNow = async function () {
+    try { await window.api.openDataDir(); }
+    catch (e) { toast('打开失败：' + e.message, 'err'); }
+  };
+
+  /* 系统设置页：查询当前端口是否已被防火墙放行（只读，不影响系统） */
+  window.checkPortRule = async function () {
+    const el = document.getElementById('sysPortRule');
+    if (!el || !window.api || !window.api.sysPortCheck) return;
+    try {
+      const port = Number((((document.getElementById('sysPortInput')||{}).value)||'').trim()) || 8765;
+      const r = await window.api.sysPortCheck(port);
+      if (!r) { el.innerHTML = '<span class="sys-bad">查询失败</span>'; return; }
+      el.innerHTML = r.allowed
+        ? '<span class="sys-ok">已放行 · ' + esc(r.rule) + '</span>'
+        : '<span class="sys-bad">未放行</span>';
+      return r;
+    } catch (e) { el.innerHTML = '<span class="sys-bad">查询失败</span>'; }
+  };
+
+  /* 系统设置页：一键提权放行端口（弹 UAC，用户确认后写入防火墙规则） */
+  window.openPortFirewall = async function () {
+    if (!window.api || !window.api.sysOpenPort) { toast('当前环境不支持端口放行', 'err'); return; }
+    const port = Number((((document.getElementById('sysPortInput')||{}).value)||'').trim()) || 8765;
+    if (!(port >= 1 && port <= 65535)) { toast('端口需在 1–65535 之间', 'err'); return; }
+    toast('正在请求放行端口 ' + port + '，请在弹出的 UAC 窗口点「是」…', 'ok');
+    try {
+      const r = await window.api.sysOpenPort(port);
+      if (r && r.allowed) {
+        toast('端口 ' + port + ' 已放行', 'ok');
+        const el = document.getElementById('sysPortRule');
+        if (el) el.innerHTML = '<span class="sys-ok">已放行 · ' + esc(r.rule) + '</span>';
+      } else {
+        toast('放行未生效：' + ((r && r.error) || '未知原因'), 'err');
+        const el = document.getElementById('sysPortRule');
+        if (el) el.innerHTML = '<span class="sys-bad">未放行</span>';
+      }
+    } catch (e) { toast('放行失败：' + e.message, 'err'); }
+  };
+
+  /* ============================================================
+   * 员工档案（工号 ↔ 姓名）— 系统设置页
+   *   - 档案存 meta.staffs，工号唯一；
+   *   - 出入库输入框可直接输工号，提交时由 StaffCore.resolveOperator 解析；
+   *   - 支持 CSV 导入（工号,姓名）/ 导出 / 模板下载。
+   * ============================================================ */
+  let staffEditingNo = '';
+
+  async function persistStaffs(list) {
+    state.staffs = StaffCore.sanitize(list);
+    try { await DB.setMeta('staffs', state.staffs); }
+    catch (e) { toast('保存失败：' + e.message, 'err'); }
+  }
+
+  window.renderStaffList = function () {
+    const box = document.getElementById('staffList');
+    if (!box) return;
+    const q = String((document.getElementById('staffQ') || {}).value || '').trim().toLowerCase();
+    let list = state.staffs.slice();
+    if (q) list = list.filter((s) => (s.no + ' ' + s.name).toLowerCase().includes(q));
+    list.sort((a, b) => String(a.no).localeCompare(String(b.no), 'zh', { numeric: true }));
+    if (!list.length) {
+      box.innerHTML = `<div class="sys-empty">${q ? '没有匹配的档案' : '还没有员工档案。可手工添加，或点右上角「导入 CSV」（两列：工号,姓名）。'}</div>`;
+      return;
+    }
+    box.innerHTML = `<div class="table-wrap"><table class="staff-table">
+        <thead><tr><th style="width:140px">工号</th><th>姓名</th><th style="width:130px">操作</th></tr></thead>
+        <tbody>${list.map((s) => `<tr>
+            <td class="staff-no">${esc(s.no)}</td>
+            <td>${esc(s.name)}</td>
+            <td class="staff-ops">
+              <button class="btn sm ghost" onclick="editStaff('${escAttr(s.no)}')">编辑</button>
+              <button class="btn sm ghost danger" onclick="delStaff('${escAttr(s.no)}')">删除</button>
+            </td></tr>`).join('')}</tbody>
+      </table></div>
+      <div class="sys-empty" style="margin-top:8px">共 ${list.length} 人</div>`;
+  };
+
+  window.saveStaff = async function () {
+    const noEl = document.getElementById('staffNo');
+    const nameEl = document.getElementById('staffName');
+    const no = String((noEl && noEl.value) || '').trim();
+    const name = String((nameEl && nameEl.value) || '').trim();
+    if (!no) { toast('请填写工号', 'err'); if (noEl) noEl.focus(); return; }
+    if (!name) { toast('请填写姓名', 'err'); if (nameEl) nameEl.focus(); return; }
+    const editing = staffEditingNo;
+    if (StaffCore.noExists(state.staffs, no, editing)) {
+      const other = StaffCore.findByNo(state.staffs, no);
+      toast(`工号 ${no} 已被「${other ? other.name : '他人'}」占用`, 'err');
+      return;
+    }
+    const wasEdit = !!editing;
+    /* 编辑时若改了工号，先摘掉旧记录，再写入新记录 */
+    const list = state.staffs.filter((s) => StaffCore.normNo(s.no) !== StaffCore.normNo(editing));
+    list.push({ no, name });
+    await persistStaffs(list);
+    staffEditingNo = '';
+    if (noEl) noEl.value = '';
+    if (nameEl) nameEl.value = '';
+    const btn = document.getElementById('staffSaveBtn');
+    if (btn) btn.textContent = '添加';
+    const cb = document.getElementById('staffCancelBtn');
+    if (cb) cb.style.display = 'none';
+    renderStaffList();
+    toast(wasEdit ? `已更新 ${name}(${no})` : `已添加 ${name}(${no})`, 'ok');
+  };
+
+  window.editStaff = function (no) {
+    const s = StaffCore.findByNo(state.staffs, no);
+    if (!s) return;
+    staffEditingNo = s.no;
+    const noEl = document.getElementById('staffNo');
+    const nameEl = document.getElementById('staffName');
+    if (noEl) noEl.value = s.no;
+    if (nameEl) nameEl.value = s.name;
+    const btn = document.getElementById('staffSaveBtn');
+    if (btn) btn.textContent = '保存修改';
+    const cb = document.getElementById('staffCancelBtn');
+    if (cb) cb.style.display = '';
+    if (nameEl) { nameEl.focus(); nameEl.select(); }
+  };
+
+  window.cancelStaffEdit = function () {
+    staffEditingNo = '';
+    const noEl = document.getElementById('staffNo');
+    const nameEl = document.getElementById('staffName');
+    if (noEl) noEl.value = '';
+    if (nameEl) nameEl.value = '';
+    const btn = document.getElementById('staffSaveBtn');
+    if (btn) btn.textContent = '添加';
+    const cb = document.getElementById('staffCancelBtn');
+    if (cb) cb.style.display = 'none';
+  };
+
+  window.delStaff = async function (no) {
+    const s = StaffCore.findByNo(state.staffs, no);
+    if (!s) return;
+    if (!confirm(`确认删除员工档案「${s.name}(${s.no})」？\n已产生的出入库流水不受影响（仍保留姓名与工号）。`)) return;
+    await persistStaffs(state.staffs.filter((x) => StaffCore.normNo(x.no) !== StaffCore.normNo(no)));
+    if (StaffCore.normNo(staffEditingNo) === StaffCore.normNo(no)) cancelStaffEdit();
+    renderStaffList();
+    toast('已删除 ' + s.name, 'ok');
+  };
+
+  window.importStaffCSV = function () {
+    const f = document.getElementById('staffFile');
+    if (f) f.click();
+  };
+
+  function staffSkipHtml(skipped) {
+    const rows = skipped.slice(0, 200).map((s) => `<tr><td>${s.line}</td><td>${esc(s.text)}</td><td>${esc(s.reason)}</td></tr>`).join('');
+    return `<p class="muted small">以下 ${skipped.length} 行没有导入（最多显示 200 行）。请修正后重新导入。</p>
+      <div class="table-wrap" style="max-height:52vh;overflow:auto"><table>
+      <thead><tr><th style="width:70px">行号</th><th>原内容</th><th style="width:150px">原因</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  }
+
+  window.onStaffFile = async function (ev) {
+    const input = ev && ev.target;
+    const f = input && input.files && input.files[0];
+    if (!f) return;
+    try {
+      const text = await f.text();
+      const r = StaffCore.parseStaffCSV(text);
+      if (!r.list.length) {
+        toast('没有读到有效数据，请确认两列为「工号,姓名」', 'err');
+      } else {
+        const list = state.staffs.map((s) => ({ no: s.no, name: s.name }));
+        let added = 0, updated = 0;
+        r.list.forEach((it) => {
+          const i = list.findIndex((s) => StaffCore.normNo(s.no) === StaffCore.normNo(it.no));
+          if (i >= 0) {
+            if (list[i].name !== it.name) { list[i].name = it.name; updated++; }
+          } else { list.push({ no: it.no, name: it.name }); added++; }
+        });
+        await persistStaffs(list);
+        renderStaffList();
+        toast(`导入完成：新增 ${added} 人，更新 ${updated} 人${r.skipped.length ? '，跳过 ' + r.skipped.length + ' 行' : ''}`, 'ok');
+        if (r.skipped.length) openModal('导入时跳过的行', staffSkipHtml(r.skipped));
+      }
+    } catch (e) {
+      toast('导入失败：' + e.message, 'err');
+    } finally {
+      if (input) input.value = '';
+    }
+  };
+
+  window.exportStaffCSV = function () {
+    if (!state.staffs.length) { toast('还没有员工档案可导出', 'err'); return; }
+    download('员工档案_' + stamp() + '.csv', StaffCore.buildStaffCSV(state.staffs), 'text/csv;charset=utf-8');
+  };
+
+  window.downloadStaffTemplate = function () {
+    const csv = '\uFEFF' + ['工号,姓名', '10086,张三', '10087,李四'].join('\r\n');
+    download('员工档案模板.csv', csv, 'text/csv;charset=utf-8');
+  };
+
   function stamp() {
     const d = new Date();
     return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
   }
-
   window.backupData = async function () {
     const data = { version: 1, exportedAt: Date.now(), parts: state.parts, transactions: state.transactions };
     download('备件系统备份_' + stamp() + '.json', JSON.stringify(data, null, 2), 'application/json');
@@ -1433,28 +1874,18 @@
   /* ============================================================
    * 二维码 + 扫码 + 盘点
    * ============================================================ */
-  const QR_PREFIX = 'SPMS1|';
+  /* 扫码解析 / 编号归一化的【唯一实现】在 js/scan-core.js（index.html 先于本文件加载），
+   * 桌面端与主进程里的移动端 HTTP 服务共用同一份规则，避免"两套逻辑漂移"。
+   * 本文件只做薄封装，不再各自实现一遍。 */
+  const QR_PREFIX = (window.ScanCore && window.ScanCore.QR_PREFIX) || 'SPMS1|';
   function makeQRToken(part) { return QR_PREFIX + (part && part.code ? part.code : ''); }
-  /* 从任意来源（扫码枪键盘键入 / openScan 原始值 / 手动输入）归一化为纯净备品编号。
-   * 支持：规范 SPMS1|<code>、历史/误输入 SPMS|<code>；裸编号原样返回。 */
   function parseQRToken(str) {
-    if (str == null) return '';
-    str = String(str).trim();
-    if (!str) return '';
-    if (str.startsWith(QR_PREFIX)) return str.slice(QR_PREFIX.length).trim();
-    const m = /^SPMS\|(.+)$/.exec(str);
-    if (m) return m[1].trim();
-    return str;
+    if (!window.ScanCore) throw new Error('scan-core.js 未加载，无法解析扫码内容');
+    return window.ScanCore.parseQRToken(str);
   }
-  /* 备品编号归一化：用于「匹配 / 检索」时容错，避免严格相等因格式差异失败。
-   * 步骤：① 剥离二维码前缀 SPMS1| / SPMS|（parseQRToken）；② 忽略大小写；
-   *       ③ 忽略分隔符差异（连字符“-”、下划线“_”、空格），使 “BJ003” 与 “BJ-003” / “bj_003” 可互匹配。
-   * 注意：仅用于“匹配/检索”，建档保存仍用 parseQRToken（保留用户定义的连字符）。 */
   function normalizeCode(raw) {
-    let s = parseQRToken(raw == null ? '' : String(raw));
-    s = s.trim().toLowerCase();
-    s = s.replace(/[\s\-_]+/g, '');
-    return s;
+    if (!window.ScanCore) throw new Error('scan-core.js 未加载，无法归一化编号');
+    return window.ScanCore.normalizeCode(raw);
   }
   function drawQR(canvas, text, opts) {
     opts = opts || {};
@@ -1785,13 +2216,7 @@
    *   - 同时替换原「最近入库 / 出库记录」面板
    * ============================================================ */
   function matchPartsByFields(q) {
-    return state.parts.filter((p) => {
-      if (q.code && normalizeCode(p.code) !== normalizeCode(q.code)) return false;
-      if (q.name && !p.name.toLowerCase().includes(q.name.toLowerCase())) return false;
-      if (q.spec && !p.spec.toLowerCase().includes(q.spec.toLowerCase())) return false;
-      if (q.loc && (p.location || '') !== q.loc) return false;
-      return true;
-    });
+    return window.ScanCore.matchParts(state.parts, q);
   }
   function fillPartFields(prefix, p) {
     const codeEl = document.getElementById(prefix + '_code');
@@ -1941,7 +2366,7 @@
         <td>${esc(t.partCode)}</td><td>${esc(t.partName)}</td>
         <td>${sys}</td><td><b>${actual}</b></td>
         <td><span class="badge ${st}">${diff >= 0 ? '+' : ''}${diff}</span></td>
-        <td>${esc(t.operator)}</td><td>${fmtTime(t.time)}</td></tr>`;
+        <td>${esc(opLabel(t))}</td><td>${fmtTime(t.time)}</td></tr>`;
     }).join('') : '<tr><td colspan="7" class="empty">暂无盘点记录</td></tr>';
   }
 
@@ -2071,7 +2496,7 @@
       return `<tr>
         <td>${badge}</td>
         <td>${t.type === 'check' ? sys : (t.type === 'in' ? '+' : '-') + t.quantity}</td>
-        <td>${esc(t.operator)}</td>
+        <td>${esc(opLabel(t))}</td>
         <td>${t.type === 'in' ? esc(t.counterparty) : ''}</td>
         <td>${fmtTime(t.time)}</td>
         <td>${esc(t.remark)}</td>
@@ -2236,6 +2661,11 @@
         const txOps = state.transactions.map((t) => t.operator).filter(Boolean);
         state.operators = Array.from(new Set([...(Array.isArray(saved) ? saved : []), ...txOps])).filter(Boolean);
       } catch (e) { state.operators = []; }
+      // 员工档案（工号 ↔ 姓名）：允许经办人直接输工号，提交时解析为「姓名 + 工号」
+      try {
+        const sf = await DB.getMeta('staffs');
+        state.staffs = StaffCore.sanitize(Array.isArray(sf) ? sf : []);
+      } catch (e) { state.staffs = []; }
     } catch (e) {
       $('#content').innerHTML = `<div class="panel">
         <div class="panel-title" style="color:var(--danger)">无法启动：本地存储不可用</div>
@@ -2257,6 +2687,21 @@
       if (!e.target.closest('.op-field')) closeOpAc();
     });
     showView('dashboard');
+
+    /* PDA 移动端提交出入库后，主进程广播 → 桌面端刷新。
+     * 注意：出入库页正在填表时不重绘，避免清空用户已输入的内容，只做提示。 */
+    if (window.api && typeof window.api.onDataChanged === 'function') {
+      window.api.onDataChanged(async () => {
+        try { await reloadAll(); } catch (e) { return; }
+        renderTopStats();
+        if (state.view === 'inbound' || state.view === 'outbound') {
+          toast('移动端已提交出入库，库存已更新', 'ok');
+          return;
+        }
+        const r = RENDERERS[state.view];
+        if (r) { try { r(); } catch (e) { /* 渲染失败不影响数据 */ } }
+      });
+    }
   }
 
   // 暴露给内联 onclick 的少量函数
@@ -2264,243 +2709,6 @@
   window.closeModal = closeModal;
   window.renderRecords = renderRecords;
   window.renderRecordsResults = renderRecordsResults;
-
-  /* ============================================================
-   * 夹具管理模块
-   * ============================================================ */
-  const FIX_STATUS = {
-    stocked: { label: '在库', cls: 'ok' },
-    checked_out: { label: '已出库', cls: 'warn' },
-    repair: { label: '维修中', cls: 'danger' },
-    retired: { label: '已报废', cls: 'muted' }
-  };
-  const FIX_TX_TYPE = {
-    out: { label: '出库', icon: '📤' },
-    return: { label: '回库', icon: '📥' },
-    in: { label: '入库', icon: '📦' },
-    repair: { label: '维修', icon: '🔧' },
-    retire: { label: '报废', icon: '🗑️' }
-  };
-
-  window.fixtureSelect = async function (id) {
-    state.fixSelectedId = id;
-    $$('.fixture-card').forEach((c) => c.classList.toggle('selected', c.dataset.id == id));
-  };
-
-  window.fixtureOut = async function (id) {
-    const f = state.fixtures.find((x) => x.id === id);
-    if (!f) { toast('夹具不存在', 'err'); return; }
-    if (f.status !== 'stocked' && f.status !== 'returned') { toast('夹具当前状态不允许出库', 'err'); return; }
-    const html = `
-      <div class="form-group"><label>经办人</label><input type="text" id="fix_out_op" placeholder="经办人（拼音联想）"></div>
-      <div class="form-group"><label>领用人</label><input type="text" id="fix_out_party" placeholder="领用人/使用部门"></div>
-      <div class="form-group"><label>出库时间</label><input type="datetime-local" id="fix_out_time" value="${nowInput()}"></div>
-      <div class="form-group"><label>备注</label><input type="text" id="fix_out_remark" placeholder="可选备注"></div>
-      <div class="form-actions">
-        <button class="btn" onclick="submitFixtureOut(${id})">确认出库</button>
-        <button class="btn ghost" onclick="closeModal()">取消</button>
-      </div>
-    `;
-    openModal(`出库 — ${f.code} ${f.name}`, html);
-  };
-
-  window.submitFixtureOut = async function (id) {
-    const f = state.fixtures.find((x) => x.id === id);
-    if (!f) { toast('夹具不存在', 'err'); return; }
-    const operator = ($('#fix_out_op') || {}).value.trim();
-    const counterparty = ($('#fix_out_party') || {}).value.trim();
-    const time = inputToMs($('#fix_out_time').value);
-    const remark = ($('#fix_out_remark') || {}).value.trim();
-    if (!operator) { toast('请填写经办人', 'err'); return; }
-    try {
-      await DB.fixtureAddTransaction({ fixtureId: id, type: 'out', operator, counterparty, time, remark });
-      closeModal();
-      await reloadAll();
-      renderFixtures();
-      toast('出库成功', 'ok');
-    } catch (e) { toast('出库失败：' + e.message, 'err'); }
-  };
-
-  window.fixtureReturn = async function (id) {
-    const f = state.fixtures.find((x) => x.id === id);
-    if (!f) { toast('夹具不存在', 'err'); return; }
-    if (f.status !== 'checked_out') { toast('夹具未处于已出库状态', 'err'); return; }
-    const html = `
-      <div class="form-group"><label>经办人</label><input type="text" id="fix_ret_op" placeholder="经办人" value=""></div>
-      <div class="form-group"><label>回库时间</label><input type="datetime-local" id="fix_ret_time" value="${nowInput()}"></div>
-      <div class="form-group"><label>备注</label><input type="text" id="fix_ret_remark" placeholder="可选备注"></div>
-      <div class="form-actions">
-        <button class="btn" onclick="submitFixtureReturn(${id})">确认回库</button>
-        <button class="btn ghost" onclick="closeModal()">取消</button>
-      </div>
-    `;
-    openModal(`回库 — ${f.code} ${f.name}`, html);
-  };
-
-  window.submitFixtureReturn = async function (id) {
-    const f = state.fixtures.find((x) => x.id === id);
-    if (!f) { toast('夹具不存在', 'err'); return; }
-    const operator = ($('#fix_ret_op') || {}).value.trim();
-    const time = inputToMs($('#fix_ret_time').value);
-    const remark = ($('#fix_ret_remark') || {}).value.trim();
-    if (!operator) { toast('请填写经办人', 'err'); return; }
-    try {
-      await DB.fixtureAddTransaction({ fixtureId: id, type: 'return', operator, counterparty: '', time, remark });
-      closeModal();
-      await reloadAll();
-      renderFixtures();
-      toast('回库成功', 'ok');
-    } catch (e) { toast('回库失败：' + e.message, 'err'); }
-  };
-
-  window.fixtureRetire = async function (id) {
-    const f = state.fixtures.find((x) => x.id === id);
-    if (!f) { toast('夹具不存在', 'err'); return; }
-    if (!confirm(`确认报废夹具 ${f.code} ${f.name}？报废后不可恢复。`)) return;
-    try {
-      await DB.fixtureAddTransaction({ fixtureId: id, type: 'retire', operator: '', counterparty: '', time: Date.now(), remark: '报废' });
-      await reloadAll();
-      renderFixtures();
-      toast('夹具已报废', 'ok');
-    } catch (e) { toast('报废失败：' + e.message, 'err'); }
-  };
-
-  window.fixtureNew = function () {
-    const html = `
-      <div class="form-group"><label>编号</label><input type="text" id="fix_new_code" placeholder="4位数字编号（如 2001）" maxlength="4"></div>
-      <div class="form-group"><label>名称</label><input type="text" id="fix_new_name" placeholder="夹具名称"></div>
-      <div class="form-group"><label>规格型号</label><input type="text" id="fix_new_spec" placeholder="规格型号"></div>
-      <div class="form-group"><label>分类</label><input type="text" id="fix_new_cat" placeholder="分类（如 冲压/焊接/装配）"></div>
-      <div class="form-group"><label>库位</label><input type="text" id="fix_new_loc" placeholder="存放位置（可选）"></div>
-      <div class="form-group"><label>备注</label><input type="text" id="fix_new_remark" placeholder="可选备注"></div>
-      <div class="form-actions">
-        <button class="btn" onclick="submitFixtureNew()">建档</button>
-        <button class="btn ghost" onclick="closeModal()">取消</button>
-      </div>
-    `;
-    openModal('新建夹具', html);
-  };
-
-  window.submitFixtureNew = async function () {
-    const code = ($('#fix_new_code') || {}).value.trim();
-    const name = ($('#fix_new_name') || {}).value.trim();
-    const spec = ($('#fix_new_spec') || {}).value.trim();
-    const category = ($('#fix_new_cat') || {}).value.trim();
-    const location = ($('#fix_new_loc') || {}).value.trim();
-    const remark = ($('#fix_new_remark') || {}).value.trim();
-    if (!code || !/^\d{4}$/.test(code)) { toast('编号为4位纯数字（如 2001）', 'err'); return; }
-    if (!name) { toast('请填写夹具名称', 'err'); return; }
-    try {
-      await DB.fixtureAdd({ code, name, spec, category, location, remark, status: 'stocked', totalOutCount: 0, totalReturnCount: 0, repairCount: 0 });
-      closeModal();
-      await reloadAll();
-      renderFixtures();
-      toast('夹具建档成功', 'ok');
-    } catch (e) { toast('建档失败：' + e.message, 'err'); }
-  };
-
-  window.fixtureSearch = function () {
-    const q = ($('#fix_search') || {}).value.trim().toLowerCase();
-    const list = $('#fixture_list');
-    if (!list) return;
-    const filtered = q ? state.fixtures.filter((f) => f.code.includes(q) || (f.name || '').toLowerCase().includes(q) || (f.spec || '').toLowerCase().includes(q)) : state.fixtures;
-    renderFixtureCards(list, filtered, state.fixSelectedId || 0);
-  };
-
-  window.fixtureExportCSV = function () {
-    const headers = ['编号', '名称', '规格', '分类', '库位', '状态', '累计出库', '累计回库', '维修次数', '备注'];
-    const rows = state.fixtures.map((f) => [f.code, f.name, f.spec || '', f.category || '', f.location || '', (FIX_STATUS[f.status] || {}).label || f.status, f.totalOutCount || 0, f.totalReturnCount || 0, f.repairCount || 0, f.remark || '']);
-    const csv = toCSV(headers, rows);
-    download('夹具清单_' + new Date().toISOString().slice(0, 10) + '.csv', csv);
-  };
-
-  function renderFixtureCards(container, fixtures, selectedId = 0) {
-    if (!fixtures.length) { container.innerHTML = '<div class="empty-tip">暂无夹具记录</div>'; return; }
-    const html = fixtures.map((f) => {
-      const isSelected = f.id === selectedId;
-      const status = FIX_STATUS[f.status] || { label: f.status, cls: '' };
-      return `
-        <div class="fixture-card ${isSelected ? 'selected' : ''}" data-id="${f.id}" onclick="fixtureSelect(${f.id})">
-          <div class="fixture-card-header">
-            <span class="fixture-code">${esc(f.code)}</span>
-            <span class="status-badge status-${status.cls}">${status.label}</span>
-          </div>
-          <div class="fixture-card-body">
-            <div class="fixture-name">${esc(f.name)}</div>
-            <div class="fixture-spec">${esc(f.spec || '-')}</div>
-            <div class="fixture-meta"><span>出库 ${f.totalOutCount || 0} 次</span><span>回库 ${f.totalReturnCount || 0} 次</span></div>
-          </div>
-          <div class="fixture-card-footer">
-            ${f.status === 'stocked' || f.status === 'returned' ? `<button class="btn sm" onclick="event.stopPropagation(); fixtureOut(${f.id})">出库</button>` : ''}
-            ${f.status === 'checked_out' ? `<button class="btn sm" onclick="event.stopPropagation(); fixtureReturn(${f.id})">回库</button>` : ''}
-            ${f.status !== 'retired' ? `<button class="btn sm btn-danger" onclick="event.stopPropagation(); fixtureRetire(${f.id})">报废</button>` : ''}
-          </div>
-        </div>
-      `;
-    }).join('');
-    container.innerHTML = `<div class="fixture-grid">${html}</div>`;
-  }
-
-  function renderFixTransactions(container, txs, filterId = null) {
-    if (!txs.length) { container.innerHTML = '<div class="empty-tip">暂无流水记录</div>'; return; }
-    const filtered = filterId ? txs.filter((t) => t.fixtureId === filterId) : txs;
-    if (!filtered.length) { container.innerHTML = '<div class="empty-tip">无匹配记录</div>'; return; }
-    const html = filtered.map((t) => {
-      const tc = FIX_TX_TYPE[t.type] || { label: t.type, icon: '📋' };
-      const fs = FIX_STATUS[t.fromStatus] || { label: t.fromStatus };
-      const ts = FIX_STATUS[t.toStatus] || { label: t.toStatus };
-      return `
-        <div class="tx-row">
-          <div class="tx-type">${tc.icon} ${tc.label}</div>
-          <div class="tx-fixture">${esc(t.fixtureCode)} ${esc(t.fixtureName)}</div>
-          <div class="tx-status">${fs.label} → ${ts.label}</div>
-          <div class="tx-operator">${esc(t.operator || '-')}</div>
-          <div class="tx-party">${esc(t.counterparty || '-')}</div>
-          <div class="tx-time">${fmtTime(t.time)}</div>
-          <div class="tx-remark">${esc(t.remark || '-')}</div>
-        </div>
-      `;
-    }).join('');
-    container.innerHTML = html;
-  }
-
-  window.renderFixtures = function () {
-    const container = $('#content');
-    if (!container) return;
-    const inStock = state.fixtures.filter((f) => f.status === 'stocked').length;
-    const outStock = state.fixtures.filter((f) => f.status === 'checked_out').length;
-    const repair = state.fixtures.filter((f) => f.status === 'repair').length;
-    const retired = state.fixtures.filter((f) => f.status === 'retired').length;
-    container.innerHTML = `
-      <div class="panel">
-        <div class="panel-title">
-          夹具管理
-          <span class="panel-actions">
-            <button class="btn sm" onclick="fixtureNew()">➕ 新建夹具</button>
-            <button class="btn sm" onclick="fixtureExportCSV()">📊 导出CSV</button>
-          </span>
-        </div>
-        <div class="stats-bar">
-          <div class="stat-item"><span class="stat-label">总计</span><span class="stat-value">${state.fixtures.length}</span></div>
-          <div class="stat-item"><span class="stat-label">在库</span><span class="stat-value stat-ok">${inStock}</span></div>
-          <div class="stat-item"><span class="stat-label">已出库</span><span class="stat-value stat-warn">${outStock}</span></div>
-          <div class="stat-item"><span class="stat-label">维修中</span><span class="stat-value stat-danger">${repair}</span></div>
-          <div class="stat-item"><span class="stat-label">已报废</span><span class="stat-value stat-muted">${retired}</span></div>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-title">夹具列表</div>
-        <div class="search-bar"><input type="text" id="fix_search" placeholder="搜索编号/名称/规格..." oninput="fixtureSearch()"></div>
-        <div id="fixture_list"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-title">流水记录</div>
-        <div id="fix_tx_list"></div>
-      </div>
-    `;
-    renderFixtureCards($('#fixture_list'), state.fixtures, state.fixSelectedId || 0);
-    renderFixTransactions($('#fix_tx_list'), state.fixTransactions, state.fixSelectedId || null);
-  };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

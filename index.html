@@ -1,73 +1,76 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>备件仓库管理系统 v2.33</title>
-  <link rel="stylesheet" href="css/style.css" />
+<html lang="zh-CN" data-page-node-id="PaDPPipy8znicpvfSynyOi">
+<head data-page-node-id="eBwD72BpEtBuIH79hb3YE2">
+  <meta charset="UTF-8" data-page-node-id="PpTHHyQfapanC7YwPxfdnx" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="EqUGolSHFlG4EwzNixsMcc" />
+  <title>备件仓库管理系统 v3.0.4</title>
+  <link rel="stylesheet" href="css/style.css" data-page-node-id="HsWP80tOQjBIUC72H9kNx1" />
 </head>
-<body>
-  <div id="app">
+<body data-page-node-id="HW7KkuoVEC9YzQ1mqFlx3G">
+  <div id="app" data-page-node-id="HDYtchWbcRogVdSPSV1vhw">
     <!-- 侧边栏 -->
-    <aside class="sidebar">
-      <div class="brand">
-        <span class="brand-logo">📦</span>
-        <span class="brand-name">备件仓库管理 v2.33</span>
+    <aside class="sidebar" data-page-node-id="WpDaLVbVTipIoOCED2Stp5">
+      <div class="brand" data-page-node-id="HKJHPLYJMa6BIHFrlF6Vl9">
+        <span class="brand-logo" data-page-node-id="QwvWXAoxMmPUgGF88CkWuh">📦</span>
+        <span class="brand-name" data-page-node-id="3wpWgrM6Rb2RHSSQ6p1oX9">备件仓库管理 v3.0.4</span>
       </div>
-      <nav class="nav">
-        <button class="nav-item active" data-view="dashboard">🏠 仪表盘</button>
-        <button class="nav-item" data-view="parts">📋 备品管理</button>
-        <button class="nav-item" data-view="inbound">⬇️ 入库管理</button>
-        <button class="nav-item" data-view="outbound">⬆️ 出库管理</button>
-        <button class="nav-item" data-view="fixtures">🔩 夹具管理</button>
-        <button class="nav-item" data-view="query">🔎 备件查询</button>
-        <button class="nav-item" data-view="location">🗺️ 库位管理</button>
-        <button class="nav-item" data-view="records">🔍 记录查询</button>
-        <button class="nav-item" data-view="data">💾 数据备份</button>
+      <nav class="nav" data-page-node-id="9z8T0PyiMtZj6dZQJ28gHi">
+        <button class="nav-item active" data-view="dashboard" data-page-node-id="oj4XU54UsqikQQV7a03mWS">🏠 仪表盘</button>
+        <button class="nav-item" data-view="parts" data-page-node-id="FBP7XSbz2PqCgeUIKBmutW">📋 备品管理</button>
+        <button class="nav-item" data-view="inbound" data-page-node-id="x43JygNDHGGOykCku0Aexx">⬇️ 入库管理</button>
+        <button class="nav-item" data-view="outbound" data-page-node-id="bniGUmg3UqNy1jiOkn4a7T">⬆️ 出库管理</button>
+        <button class="nav-item" data-view="query" data-page-node-id="bR7fbZPFHJwtRwmyke2w0G">🔎 备件查询</button>
+        <button class="nav-item" data-view="location" data-page-node-id="Ie9lEB4D5UbVivDZ2jrlq3">🗺️ 库位管理</button>
+        <button class="nav-item" data-view="records" data-page-node-id="2UjtTjV2GF7kZaSMA8Z8aX">🔍 记录查询</button>
+        <button class="nav-item" data-view="data" data-page-node-id="3ktojIuXS6XsusH5dQztpw">💾 数据备份</button>
+        <button class="nav-item" data-view="settings">⚙️ 系统设置</button>
       </nav>
-      <div class="sidebar-foot">
-        <small class="foot-version">本地存储 · 无需联网</small>
-        <small class="foot-sign">design by Frank, 2026.7.27</small>
+      <div class="sidebar-foot" data-page-node-id="3kNTD6vpqtWajG4zOJNmHC">
+        <small class="foot-version" data-page-node-id="mSPUCS1oOQ2LL5HuIhNnSG">本地存储 · 无需联网</small>
+        <small class="foot-sign" data-page-node-id="MZDHWM80GohQR9cV5qkVdu">design by Frank, 2026.7.27</small>
       </div>
     </aside>
 
     <!-- 主区域 -->
-    <main class="main">
-      <header class="topbar">
-        <h1 id="viewTitle">仪表盘</h1>
-        <div class="topbar-right">
-          <span id="topStats" class="top-stats"></span>
+    <main class="main" data-page-node-id="de9729Xtz8eZZpATwFVELF">
+      <header class="topbar" data-page-node-id="lHjEsS8pwkSRVKmUXZ5wPc">
+        <h1 id="viewTitle" data-page-node-id="5OCo1MZP7P7dPLe5FwpHJi">仪表盘</h1>
+        <div class="topbar-right" data-page-node-id="eJBLA92qs7ArYsyMjzfeox">
+          <span id="topStats" class="top-stats" data-page-node-id="rU1G7JhwNud55S3TeU7L4t"></span>
         </div>
       </header>
-      <section id="content" class="content"><!-- 动态渲染 --></section>
+      <section id="content" class="content" data-page-node-id="T4g90zSaCanVwFDWwa6wZZ"><!-- 动态渲染 --></section>
     </main>
   </div>
 
   <!-- 关于 / About（主页右下角） -->
-  <button id="aboutBtn" class="about-btn" onclick="openAbout()">关于 / About</button>
+  <button id="aboutBtn" class="about-btn" onclick="openAbout()" data-page-node-id="gnDOSc0rASyGIDioDh4iSV">关于 / About</button>
 
   <!-- 通用模态框 -->
-  <div id="modalOverlay" class="modal-overlay" hidden>
-    <div class="modal">
-      <div class="modal-head">
-        <h3 id="modalTitle">标题</h3>
-        <button class="modal-close" id="modalClose">×</button>
+  <div id="modalOverlay" class="modal-overlay" hidden data-page-node-id="C18ALrCnbSsw68V8hbrUug">
+    <div class="modal" data-page-node-id="hy843i9UdatNi6FPH72faN">
+      <div class="modal-head" data-page-node-id="WYD5oqfH9kLmuWggDeB9yM">
+        <h3 id="modalTitle" data-page-node-id="Gba3n6lDRK7BBLZ7nbPFTQ">标题</h3>
+        <button class="modal-close" id="modalClose" data-page-node-id="vfGVqQDwams1o58KLR2fih">×</button>
       </div>
-      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-body" id="modalBody" data-page-node-id="KHH28TO3SNg2VAtNtTtayF"></div>
     </div>
   </div>
 
   <!-- 轻提示 -->
-  <div id="toast" class="toast" hidden></div>
+  <div id="toast" class="toast" hidden data-page-node-id="sWR0DGLgVaI9z9nh5Z6RjB"></div>
 
   <!-- 打印专用区域（屏幕隐藏，打印时显示） -->
-  <div id="printArea" class="print-area"></div>
+  <div id="printArea" class="print-area" data-page-node-id="Ifu0OlyQ2OIa2SkehxXgyk"></div>
 
   <!-- 离线二维码库（已本地内置，无需联网） -->
   <script src="js/vendor/qrcode-generator.js"></script>
   <script src="js/vendor/jsQR.js"></script>
   <!-- 拼音模糊匹配（本地内置，用于经办人/领用人输入联想） -->
   <script src="js/pinyin-match.js"></script>
+  <!-- 扫码解析 / 编号归一化共享模块（桌面与移动端 API 共用同一份规则） -->
+  <script src="js/scan-core.js"></script>
+  <script src="js/staff-core.js"></script>
   <script src="js/db.js"></script>
   <script src="js/app.js"></script>
 </body>

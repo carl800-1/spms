@@ -3,10 +3,14 @@
  * main.js — Electron 主进程（v2.0）
  * 创建窗口、加载 index.html、注册 db-* IPC 交给 store.js 处理。
  * ============================================================ */
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const { execFile, execFileSync } = require('child_process');
 const store = require('./store');
+const mobileServer = require('./mobile-server');
+const PortCore = require('./js/port-core');
 
 /* 数据文件存放位置：
  *  - 打包后的程序（portable / 解压目录）：放在「程序所在目录」下（spms-data.json），
@@ -33,7 +37,7 @@ function createWindow() {
     height: 820,
     minWidth: 1024,
     minHeight: 700,
-    title: '备件仓库管理系统 v2.33',
+    title: '备件仓库管理系统 v3.0.4',
     backgroundColor: '#f1f5f9',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -44,6 +48,26 @@ function createWindow() {
   });
   win.loadFile(path.join(__dirname, 'index.html'));
   win.setMenuBarVisibility(false);
+}
+
+/* 只读查询端口是否已被防火墙入站规则放行（不需管理员权限）。
+ * netsh show rule 找不到规则时退出码仍为 0，故用 PortCore.parseShowResult 解析文本。 */
+function checkPortRuleSync(port) {
+  const p = PortCore.normalizePort(port);
+  let out = '';
+  let code = -1;
+  try {
+    const r = execFileSync('netsh', PortCore.showArgs(p), {
+      encoding: 'utf8', windowsHide: true, timeout: 15000,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    out = String(r || '');
+    code = 0;
+  } catch (err) {
+    out = String((err && err.stdout) || '');
+    code = (err && err.status) || -1;
+  }
+  return { port: p, rule: PortCore.ruleName(p), allowed: PortCore.parseShowResult(out, p), code: code, raw: out.slice(0, 800) };
 }
 
 const handlers = {
@@ -64,13 +88,61 @@ const handlers = {
   'db-setMeta': (e, p) => store.setMeta(p.key, p.value),
   'db-getLocationAudits': () => store.getLocationAudits(),
   'db-saveLocationAudit': (e, audit) => store.saveLocationAudit(audit),
-  /* 夹具管理 */
-  'fixture-add': (e, fixture) => store.addFixture(fixture),
-  'fixture-update': (e, fixture) => store.updateFixture(fixture),
-  'fixture-del': (e, id) => store.delFixture(id),
-  'fixture-getAll': () => store.getFixtures(),
-  'fixture-addTransaction': (e, tx) => store.addFixTransaction(tx),
-  'fixture-getTransactions': () => store.getFixTransactions(),
+  /* PDA 移动端：状态查询、修改 PIN、重启服务 */
+  'mobile-status': () => mobileServer.status(),
+  'mobile-set-pin': (e, pin) => {
+    try { mobileServer.setPin(pin); return { ok: true, status: mobileServer.status() }; }
+    catch (err) { return { ok: false, error: err.message, status: mobileServer.status() }; }
+  },
+  'mobile-restart': (e, port) => {
+    mobileServer.restart(port);
+    return { ok: true, status: mobileServer.status() };
+  },
+  /* 系统设置页：本机信息（版本 / 数据目录）+ 一键打开数据目录 */
+  'sys-info': () => ({
+    version: app.getVersion(),
+    packaged: app.isPackaged,
+    dataDir: dataDir,
+    dataFile: newDataFile,
+    exists: fs.existsSync(newDataFile),
+    size: (() => { try { return fs.statSync(newDataFile).size; } catch (e) { return 0; } })()
+  }),
+  'sys-open-data-dir': () => shell.openPath(dataDir),
+  /* PDA 端口防火墙：只读查询当前端口是否已被入站规则放行（不需管理员权限）。 */
+  'sys-port-check': (e, port) => checkPortRuleSync(port),
+  /* PDA 端口防火墙放行：提权执行 netsh（UAC 弹窗由用户确认）。
+   * 先删同名旧规则再建，保证幂等；完成后再只读复核一次，UAC 点「否」也能如实返回。 */
+  'sys-open-port': (e, port) => new Promise((resolve) => {
+    const p = PortCore.normalizePort(port);
+    const rule = PortCore.ruleName(p);
+    if (process.platform !== 'win32') {
+      return resolve({ ok: false, allowed: false, port: p, rule: rule, error: '仅支持 Windows' });
+    }
+    // 生成临时 bat（规则名含空格，由 cmd 原生解析引号最稳），再用 PowerShell 提权执行
+    const bat = path.join(os.tmpdir(), 'spms-open-port-' + process.pid + '-' + Date.now() + '.bat');
+    const delLine = 'netsh ' + PortCore.cmdLine(PortCore.deleteArgs(p));
+    const addLine = 'netsh ' + PortCore.cmdLine(PortCore.addArgs(p));
+    const script = ['@echo off', delLine + ' >nul 2>&1', addLine + ' >nul 2>&1', 'exit /b 0'].join('\r\n');
+    try { fs.writeFileSync(bat, script, 'utf8'); } catch (err) {
+      return resolve({ ok: false, allowed: false, port: p, rule: rule, error: '写临时脚本失败：' + err.message });
+    }
+    // Start-Process -Verb RunAs 拉起 bat（UAC 由用户确认），-Wait 等它执行完再复核
+    const psCmd = 'Start-Process -FilePath "' + bat + '" -Verb RunAs -Wait -WindowStyle Hidden';
+    execFile('powershell.exe', ['-NoProfile', '-Command', psCmd],
+      { windowsHide: true, timeout: 60000 },
+      (err) => {
+        try { fs.unlinkSync(bat); } catch (e2) { /* ignore */ }
+        // 复核：只读查询是否真的放行（UAC 点「否」时规则不会出现）
+        const check = checkPortRuleSync(p);
+        resolve({
+          ok: !!check.allowed,
+          allowed: !!check.allowed,
+          port: p,
+          rule: rule,
+          error: check.allowed ? '' : (err ? ('提权或执行失败：' + err.message) : 'UAC 已取消，或规则未生效')
+        });
+      });
+  }),
   /* 打印标签：按传入的 pageSize（毫米换算的微米 / 标准尺寸名）与份数调用 Chromium 打印，
    * 由渲染进程设置 #printArea 的 CSS 变量控制对齐与边距，这里只负责把纸张规格交给打印引擎。 */
   'print-labels': (e, opts) => {
@@ -96,7 +168,22 @@ for (const [channel, fn] of Object.entries(handlers)) {
   ipcMain.handle(channel, fn);
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  /* 移动端服务：让 PDA 浏览器经局域网直接办理出入库。
+   * 与桌面窗口同在主进程，直接读写同一份 spms-data.json；移动端提交后广播刷新桌面。 */
+  mobileServer.start({
+    // 默认 8765；可用 SPMS_MOBILE_PORT 覆盖（多实例 / 自动化测试用，避免端口被占）
+    port: Number(process.env.SPMS_MOBILE_PORT) || 8765,
+    version: app.getVersion(),
+    onChange: (info) => {
+      if (!info || info.source !== 'mobile') return;
+      BrowserWindow.getAllWindows().forEach((w) => {
+        try { w.webContents.send('data-changed'); } catch (e) { /* 窗口已关闭 */ }
+      });
+    }
+  });
+});
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
