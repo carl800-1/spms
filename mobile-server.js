@@ -20,6 +20,12 @@
  *
  * 安全：仅局域网可达 + 4 位 PIN 换取的临时令牌（12 小时有效）。
  * 写操作全部是主进程同步调用，不存在并发写坏 JSON 的窗口。
+ *
+ * v3.0.5 新增：电脑网页版（desktop.html）—— 浏览器加载整套桌面前端，
+ *   /api/invoke 把桌面的 db-* channel 分发到同一份 store.js，显示/数据与 exe 一致；
+ *   PDA 与电脑网页版 PIN 拆分（meta.mobilePin / meta.desktopPin），令牌带 scope 隔离，
+ *   PDA 令牌只能出入库、desktop 令牌才有完整数据管理网关。电脑 PIN 未设置时
+ *   回退到 PDA PIN（升级平滑）。PDA 端路由（/、/api/part 等）完全不变。
  * ============================================================ */
 const http = require('http');
 const fs = require('fs');
@@ -30,49 +36,95 @@ const store = require('./store');
 const ScanCore = require('./js/scan-core');
 const StaffCore = require('./js/staff-core');
 
-const PIN_META_KEY = 'mobilePin';
+const PIN_META_KEY = 'mobilePin';            // PDA 端 PIN（历史键，保持不变）
+const DESKTOP_PIN_META_KEY = 'desktopPin';   // 电脑网页版 PIN（v3.0.5 拆分）
 const DEFAULT_PIN = '1234';
 const TOKEN_TTL = 12 * 60 * 60 * 1000;
 const MAX_BODY = 64 * 1024;
 
+/* 令牌权限范围（v3.0.5）：pda 只能出入库，desktop 才有完整数据管理网关 */
+const SCOPE_PDA = 'pda';
+const SCOPE_DESKTOP = 'desktop';
+/* 接口按 scope 隔离：pda 令牌碰不到管理网关，desktop 令牌不能冒用 PDA 出入库 */
+const DESKTOP_ONLY_APIS = new Set([
+  '/api/invoke', '/api/read-spreadsheet', '/api/data-revision',
+  '/api/desktop-status', '/api/sys-info', '/api/mobile-set-pin', '/api/mobile-restart'
+]);
+const PDA_ONLY_APIS = new Set([
+  '/api/part', '/api/search', '/api/operators', '/api/staffs', '/api/recent', '/api/tx'
+]);
+
 const STATIC_FILES = {
+  /* PDA 端（保持原样） */
   '/': { file: 'mobile.html', type: 'text/html; charset=utf-8' },
   '/mobile.html': { file: 'mobile.html', type: 'text/html; charset=utf-8' },
   '/css/mobile.css': { file: 'css/mobile.css', type: 'text/css; charset=utf-8' },
   '/js/scan-core.js': { file: 'js/scan-core.js', type: 'application/javascript; charset=utf-8' },
   '/js/mobile.js': { file: 'js/mobile.js', type: 'application/javascript; charset=utf-8' },
   '/manifest.json': { file: 'manifest.json', type: 'application/manifest+json; charset=utf-8' },
-  '/icons/icon.svg': { file: 'icons/icon.svg', type: 'image/svg+xml; charset=utf-8' }
+  '/icons/icon.svg': { file: 'icons/icon.svg', type: 'image/svg+xml; charset=utf-8' },
+  /* 电脑网页版（v3.0.5）—— 与 exe 共用整套前端资源 */
+  '/desktop.html': { file: 'desktop.html', type: 'text/html; charset=utf-8' },
+  '/pc': { file: 'desktop.html', type: 'text/html; charset=utf-8' },
+  '/css/style.css': { file: 'css/style.css', type: 'text/css; charset=utf-8' },
+  '/js/desktop-api.js': { file: 'js/desktop-api.js', type: 'application/javascript; charset=utf-8' },
+  '/js/app.js': { file: 'js/app.js', type: 'application/javascript; charset=utf-8' },
+  '/js/db.js': { file: 'js/db.js', type: 'application/javascript; charset=utf-8' },
+  '/js/pinyin-match.js': { file: 'js/pinyin-match.js', type: 'application/javascript; charset=utf-8' },
+  '/js/staff-core.js': { file: 'js/staff-core.js', type: 'application/javascript; charset=utf-8' },
+  '/js/vendor/qrcode-generator.js': { file: 'js/vendor/qrcode-generator.js', type: 'application/javascript; charset=utf-8' },
+  '/js/vendor/jsQR.js': { file: 'js/vendor/jsQR.js', type: 'application/javascript; charset=utf-8' }
 };
 
 let server = null;
-let cfg = { port: 8765, onChange: null, version: '' };
+let cfg = { port: 8765, onChange: null, version: '', dataDir: '' };
 let lastError = '';
-const tokens = new Map(); // token → 过期时间戳
+let dataRevision = 0; // 数据版本号：任何写操作后 +1，网页版轮询此值触发刷新
+const tokens = new Map(); // token → { exp: 过期时间戳, scope: 'pda' | 'desktop' }
 
 /* ---------------- PIN / 令牌 ---------------- */
-function getPin() {
-  const p = store.getMeta(PIN_META_KEY);
+/* scope 省略时默认 pda，兼容旧调用（PDA 端 / 历史 API） */
+function pinMetaKey(scope) {
+  return scope === SCOPE_DESKTOP ? DESKTOP_PIN_META_KEY : PIN_META_KEY;
+}
+function getPin(scope) {
+  const p = store.getMeta(pinMetaKey(scope));
+  /* 电脑 PIN 未单独设置过时，回退到 PDA PIN（升级平滑：老用户升级后两端 PIN 一致） */
+  if (scope === SCOPE_DESKTOP && !p) {
+    const legacy = store.getMeta(PIN_META_KEY);
+    return legacy ? String(legacy) : DEFAULT_PIN;
+  }
   return p ? String(p) : DEFAULT_PIN;
 }
-function setPin(pin) {
+function setPin(pin, scope) {
   const v = String(pin == null ? '' : pin).trim();
   if (!/^\d{4}$/.test(v)) throw new Error('PIN 必须是 4 位数字');
-  store.setMeta(PIN_META_KEY, v);
+  store.setMeta(pinMetaKey(scope), v);
   return v;
 }
-function issueToken() {
+function issueToken(scope) {
   const now = Date.now();
-  tokens.forEach((exp, tk) => { if (exp <= now) tokens.delete(tk); });
+  tokens.forEach((rec, tk) => { if (rec.exp <= now) tokens.delete(tk); });
   const token = crypto.randomBytes(16).toString('hex');
-  tokens.set(token, now + TOKEN_TTL);
+  tokens.set(token, { exp: now + TOKEN_TTL, scope: scope === SCOPE_DESKTOP ? SCOPE_DESKTOP : SCOPE_PDA });
   return token;
 }
 function tokenValid(token) {
   if (!token) return false;
-  const exp = tokens.get(token);
-  if (!exp) return false;
-  if (exp <= Date.now()) { tokens.delete(token); return false; }
+  const rec = tokens.get(token);
+  if (!rec) return false;
+  if (rec.exp <= Date.now()) { tokens.delete(token); return false; }
+  return true;
+}
+function tokenScope(token) {
+  const rec = tokens.get(token);
+  return rec ? rec.scope : null;
+}
+function requireScope(res, token, scope) {
+  if (tokenScope(token) !== scope) {
+    json(res, 403, { ok: false, error: scope === SCOPE_DESKTOP ? '此操作仅限电脑网页版' : '此操作仅限 PDA 端' });
+    return false;
+  }
   return true;
 }
 
@@ -196,6 +248,48 @@ function handleTx(body) {
   return { txId: txId, operator: operator, operatorNo: who.no || '', part: publicPart(fresh) };
 }
 
+/* ============================================================
+ * 电脑网页版：IPC channel → store.js 分发器（v3.0.5）
+ * 与 main.js 的 handlers 一一对应，保证浏览器端与 exe 口径完全一致。
+ * Electron 专属能力返回 __unsupported，由 desktop-api.js 的降级处理。
+ * ============================================================ */
+const WRITE_CHANNELS = new Set([
+  'db-add', 'db-put', 'db-del', 'db-clear', 'db-setMeta',
+  'db-addTransaction', 'db-addPart', 'db-updatePart', 'db-saveLocationAudit'
+]);
+function unsupported(what) { return { __unsupported: true, error: '网页版不支持' + what + '，请在客户端使用' }; }
+function invokeStore(channel, p) {
+  /* payload 原样透传：db-getAll/db-count/db-getMeta/db-clear/db-open 的 payload 是标量，
+   * 其余 channel 的 payload 是对象。不能统一转 {}，否则标量参数全丢（曾致测试失败）。 */
+  if (p == null) p = {};
+  switch (channel) {
+    /* 通用数据层（与 main.js handlers 逐条对应） */
+    case 'db-open': return store.open();
+    case 'db-getAll': return store.getAll(p);
+    case 'db-get': return store.get(p.name, p.id);
+    case 'db-add': return store.add(p.name, p.item);
+    case 'db-put': return store.put(p.name, p.item);
+    case 'db-del': return store.del(p.name, p.id);
+    case 'db-clear': return store.clear(p);
+    case 'db-count': return store.count(p);
+    case 'db-getByIndex': return store.getByIndex(p.name, p.index, p.value);
+    case 'db-getByRange': return store.getByRange(p.name, p.index, p.range);
+    case 'db-addTransaction': return store.addTransaction(p);
+    case 'db-addPart': return store.addPart(p);
+    case 'db-updatePart': return store.updatePart(p);
+    case 'db-getMeta': return store.getMeta(p);
+    case 'db-setMeta': return store.setMeta(p.key, p.value);
+    case 'db-getLocationAudits': return store.getLocationAudits();
+    case 'db-saveLocationAudit': return store.saveLocationAudit(p);
+    /* Electron 专属：浏览器已有降级 */
+    case 'pick-spreadsheet': return unsupported('系统文件选择框');
+    case 'print-labels': return unsupported('系统打印（请用浏览器打印）');
+    case 'sys-open-data-dir': return unsupported('打开本地目录');
+    case 'sys-port-check': case 'sys-open-port': return unsupported('端口防火墙设置（请在客户端操作）');
+    default: throw new Error('未知的数据通道：' + channel);
+  }
+}
+
 /* ---------------- 路由 ---------------- */
 async function handle(req, res) {
   const u = new URL(req.url, 'http://localhost');
@@ -217,17 +311,91 @@ async function handle(req, res) {
   if (pathname === '/api/login' && req.method === 'POST') {
     let body;
     try { body = await readBody(req); } catch (e) { json(res, 400, { ok: false, error: e.message }); return; }
+    const scope = body.scope === SCOPE_DESKTOP ? SCOPE_DESKTOP : SCOPE_PDA;
     const pin = String(body.pin || '').trim();
-    if (pin !== getPin()) { json(res, 401, { ok: false, error: 'PIN 不正确' }); return; }
-    json(res, 200, { ok: true, token: issueToken(), version: cfg.version });
+    if (pin !== getPin(scope)) { json(res, 401, { ok: false, error: 'PIN 不正确' }); return; }
+    json(res, 200, { ok: true, token: issueToken(scope), scope: scope, version: cfg.version });
     return;
   }
 
   /* 其余接口校验令牌 */
   const token = req.headers['x-spms-token'] || u.searchParams.get('token') || '';
   if (!tokenValid(token)) { json(res, 401, { ok: false, error: '登录已失效，请重新输入 PIN' }); return; }
+  /* v3.0.5 scope 隔离：按令牌来源限制可用接口，PDA PIN 泄露也碰不到数据管理 */
+  if (DESKTOP_ONLY_APIS.has(pathname) && !requireScope(res, token, SCOPE_DESKTOP)) return;
+  if (PDA_ONLY_APIS.has(pathname) && !requireScope(res, token, SCOPE_PDA)) return;
 
   try {
+    /* ============================================================
+     * 电脑网页版通用数据网关（v3.0.5）
+     * 浏览器 desktop-api.js 的 invoke(channel,payload) → 这里 → 同一份 store.js。
+     * channel 与 main.js 的 handlers 一一对应；Electron 专属能力由浏览器端降级。
+     * ============================================================ */
+    if (pathname === '/api/invoke' && req.method === 'POST') {
+      let body;
+      try { body = await readBody(req); } catch (e) { json(res, 400, { ok: false, error: e.message }); return; }
+      const channel = String(body.channel || '');
+      const p = body.payload;
+      let result;
+      try {
+        result = invokeStore(channel, p);
+      } catch (e) {
+        json(res, 400, { ok: false, error: (e && e.message) || String(e) }); return;
+      }
+      if (result && result.__unsupported) {
+        json(res, 501, { ok: false, error: result.error }); return;
+      }
+      /* 写操作后广播数据版本变更（供网页版轮询刷新 + 桌面窗口 data-changed） */
+      if (WRITE_CHANNELS.has(channel)) {
+        dataRevision++;
+        if (typeof cfg.onChange === 'function') {
+          try { cfg.onChange({ source: 'desktop', channel: channel }); } catch (e) { /* 不影响结果 */ }
+        }
+      }
+      json(res, 200, { ok: true, result: result === undefined ? null : result });
+      return;
+    }
+
+    /* 数据版本号（网页版轮询判断是否有别端写入，触发自动刷新） */
+    if (pathname === '/api/data-revision' && req.method === 'GET') {
+      json(res, 200, { ok: true, revision: dataRevision });
+      return;
+    }
+
+    /* 网页版系统设置：服务状态 / 本机信息 / 改 PIN / 重启服务 */
+    if (pathname === '/api/desktop-status' && req.method === 'GET') {
+      const st = status();
+      json(res, 200, {
+        ok: true, running: st.running, port: st.port, ip: st.ip, lan: st.lan, url: st.url,
+        pin: st.pin,            // PDA PIN（兼容旧字段）
+        pdaPin: st.pdaPin,      // PDA PIN（v3.0.5 明确命名）
+        desktopPin: st.desktopPin, // 电脑网页版 PIN
+        version: st.version
+      });
+      return;
+    }
+    if (pathname === '/api/sys-info' && req.method === 'GET') {
+      const dir = cfg.dataDir || __dirname;
+      const dataFile = path.join(dir, 'spms-data.json');
+      let size = 0; try { size = fs.statSync(dataFile).size; } catch (e) {}
+      json(res, 200, { ok: true, version: cfg.version, dataDir: dir, dataFile: dataFile, exists: !!size, size: size, web: true });
+      return;
+    }
+    if (pathname === '/api/mobile-set-pin' && req.method === 'POST') {
+      let body;
+      try { body = await readBody(req); } catch (e) { json(res, 400, { ok: false, error: e.message }); return; }
+      /* scope 省略时默认 pda（兼容旧调用）；系统设置页改电脑 PIN 时显式传 desktop */
+      const scope = body.scope === SCOPE_DESKTOP ? SCOPE_DESKTOP : SCOPE_PDA;
+      try { setPin(body.pin, scope); json(res, 200, { ok: true, scope: scope, status: status() }); }
+      catch (err) { json(res, 400, { ok: false, error: err.message, status: status() }); }
+      return;
+    }
+    if (pathname === '/api/mobile-restart' && req.method === 'POST') {
+      let body;
+      try { body = await readBody(req); } catch (e) { json(res, 400, { ok: false, error: e.message }); return; }
+      json(res, 200, { ok: true, status: restart(body.port) });
+      return;
+    }
     if (pathname === '/api/part' && req.method === 'GET') {
       const code = u.searchParams.get('code') || '';
       const part = ScanCore.findPart(store.getAll('parts'), code);
@@ -314,6 +482,7 @@ function start(opts) {
     if (isFinite(p) && p >= 0 && p <= 65535) cfg.port = p;
   }
   if (opts.version) cfg.version = opts.version;
+  if (opts.dataDir) cfg.dataDir = opts.dataDir;
   if (typeof opts.onChange === 'function') cfg.onChange = opts.onChange;
   if (typeof opts.onListening === 'function') cfg.onListening = opts.onListening;
 
@@ -363,10 +532,13 @@ function status() {
     /* 系统设置页用：带网卡名的地址清单，装 PDA 时逐台粘贴，避免填成 127.0.0.1 或虚拟网卡 */
     lan: ips.map((x) => ({ address: x.address, name: x.name, url: 'http://' + x.address + ':' + actualPort })),
     url: 'http://' + ip + ':' + actualPort,
-    pin: getPin(),
+    pin: getPin(SCOPE_PDA),        // PDA PIN（兼容旧字段）
+    pdaPin: getPin(SCOPE_PDA),     // PDA PIN（v3.0.5 明确命名）
+    desktopPin: getPin(SCOPE_DESKTOP), // 电脑网页版 PIN（未设置时回退 PDA PIN）
     error: lastError,
     version: cfg.version
   };
 }
 
+/* 对外 getPin/setPin 保持旧签名（默认 pda），新增 scope 参数供系统设置页改电脑 PIN */
 module.exports = { start, stop, restart, status, getPin, setPin, localIPs, DEFAULT_PIN };

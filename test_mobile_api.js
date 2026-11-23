@@ -55,7 +55,7 @@ function request(port, method, pathName, body, token) {
   store.addPart({ code: '1002', name: '内六角螺栓', spec: 'M8×30', location: 'B1-01-01', category: '紧固件', unit: '个', stock: 2, safeStock: 1 });
 
   const port = await new Promise((resolve) => {
-    srv.start({ port: 0, version: '3.0.4', onListening: (st) => resolve(st.port) });
+    srv.start({ port: 0, version: '3.0.5', onListening: (st) => resolve(st.port) });
   });
   console.log('服务已启动，端口 ' + port);
 
@@ -63,7 +63,7 @@ function request(port, method, pathName, body, token) {
   let r = await request(port, 'GET', '/api/ping');
   eq('ping 状态码', r.status, 200);
   eq('ping ok', r.json.ok, true);
-  eq('ping 版本', r.json.version, '3.0.4');
+  eq('ping 版本', r.json.version, '3.0.5');
 
   r = await request(port, 'GET', '/');
   eq('移动页状态码', r.status, 200);
@@ -73,7 +73,12 @@ function request(port, method, pathName, body, token) {
   eq('移动端样式可访问', r.status, 200);
 
   r = await request(port, 'GET', '/js/app.js');
-  // 桌面端脚本不在白名单内 → 不应暴露
+  // v3.0.5 起桌面前端脚本对电脑网页版开放（与 exe 共用同一套前端）
+  eq('桌面脚本已对网页版开放', r.status, 200);
+  r = await request(port, 'GET', '/js/desktop-api.js');
+  eq('网页版 shim 可访问', r.status, 200);
+  r = await request(port, 'GET', '/package.json');
+  // 真正不在白名单内的文件仍应被拒
   eq('非白名单静态资源被拒', r.status, 404);
 
   /* ---- 鉴权 ---- */

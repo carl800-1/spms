@@ -540,6 +540,13 @@
         <div class="about-scroll">
           ${mb}
           <h3 class="about-h">变更日记</h3>
+          <h4 class="about-ver">v3.0.5</h4>
+          <ul class="about-list">
+            <li><strong>【新增】电脑网页版访问</strong>：在局域网内的电脑浏览器打开 <code>http://本机IP:8765/pc</code>，即可用与客户端<strong>完全相同</strong>的界面和权限操作全部业务（备品、出入库、查询、库位、记录、数据备份），数据与客户端实时同步、无需安装。</li>
+            <li><strong>【新增】独立网页版 PIN 与权限隔离</strong>：系统设置页「💻 电脑网页版访问」面板可单独设置网页版 PIN（未设置时暂用 PDA PIN）；网页版令牌与 PDA 令牌权限隔离，PDA 只能扫码出入库，网页版才有完整数据管理权限。</li>
+            <li><strong>【新增】网页版适配</strong>：登录遮罩、局域网地址列表与二维码、浏览器打印降级、数据变更自动刷新；窄屏分辨率下侧栏自适应收窄。</li>
+            <li>版本号升级至 <strong>3.0.5</strong>。</li>
+          </ul>
           <h4 class="about-ver">v3.0.4</h4>
           <ul class="about-list">
             <li><strong>【新增】端口放行自动化</strong>：系统设置页新增「端口放行」状态行 + 「🔓 一键放行」按钮——点击后提权（UAC 确认）为 PDA 端口添加 Windows 防火墙入站规则，并自动复核是否生效；UAC 点「否」如实提示。放行规则覆盖所有网络类型（含现场常被识别为「公用网络」的 Wi-Fi）。</li>
@@ -1538,6 +1545,45 @@
       </div>
 
       <div class="panel">
+        <div class="panel-title">
+          💻 电脑网页版访问
+          <span class="panel-actions">
+            <button class="btn sm ghost" onclick="loadSettings()">↻ 刷新</button>
+          </span>
+        </div>
+        <p class="muted small" style="margin:0 0 10px">在同一局域网的<strong>电脑浏览器</strong>打开下面地址，可用与客户端<strong>完全相同</strong>的界面和权限操作全部业务（备品/出入库/库位/记录/数据备份）。数据与客户端实时同步，无需安装。</p>
+
+        <div class="sys-row">
+          <div class="kv"><span>访问地址</span>
+            <b id="deskUrl" class="path">读取中…</b>
+            <button class="btn sm ghost" onclick="copyDeskUrl()">复制</button>
+          </div>
+          <div class="kv"><span>网页版 PIN</span>
+            <input id="deskPinInput" maxlength="4" inputmode="numeric" style="width:76px" />
+            <button class="btn sm" onclick="saveDeskPin()">保存 PIN</button>
+            <em class="muted small">与 PDA PIN 独立；未设置时暂用 PDA PIN</em>
+          </div>
+        </div>
+
+        <div class="sys-block">
+          <div class="sys-label">全部网卡地址
+            <em>电脑浏览器用浏览器所在机器的网络；多网卡时选与访问端互通的那张</em>
+          </div>
+          <div id="deskLan"><div class="sys-empty">读取中…</div></div>
+        </div>
+
+        <div class="sys-qr">
+          <canvas id="deskQR"></canvas>
+          <div class="sys-qr-tip">用另一台电脑的浏览器扫码直接打开（用的是首张网卡地址）</div>
+        </div>
+
+        <p class="sys-tip">① 网页版 PIN 与 PDA PIN 分开设置，网页版拥有完整数据管理权限，请勿泄露；
+          ② 首次打开需输入 4 位 PIN，登录后 12 小时内免重复登录；
+          ③ 需与客户端一样放行端口（见上方「端口放行」），电脑浏览器才能访问；
+          ④ 网页版的打印使用浏览器自带打印功能，打开本地数据目录需在客户端操作。</p>
+      </div>
+
+      <div class="panel">
         <div class="panel-title">本机信息</div>
         <div class="sys-row">
           <div class="kv"><span>版本</span><b id="sysVer">—</b></div>
@@ -1613,6 +1659,30 @@
         if (cv) { try { drawQR(cv, st.url, { scale: 6, margin: 3 }); } catch (e) { /* 二维码失败不影响设置页 */ } }
       }
 
+      /* 电脑网页版：地址 = 网卡地址 + /pc；PIN 与 PDA 独立（未设置时回退 PDA PIN） */
+      if (st && st.lan && st.lan.length) {
+        const base = String(st.url || '').replace(/\/$/, '');
+        const deskUrl = base + '/pc';
+        const du = $('#deskUrl');
+        if (du) { du.textContent = deskUrl; du.title = deskUrl; }
+        const dcv = $('#deskQR');
+        if (dcv) { try { drawQR(dcv, deskUrl, { scale: 6, margin: 3 }); } catch (e) { /* ignore */ } }
+        const dl = $('#deskLan');
+        if (dl) {
+          dl.innerHTML = '<div class="lan-list">' + st.lan.map((it, i) => {
+            const u = String(it.url || '').replace(/\/$/, '') + '/pc';
+            return `<div class="lan-item${i === 0 ? ' primary' : ''}">
+               <b>${esc(u)}</b>
+               <span class="nic">${esc(it.name || '网卡')}${i === 0 ? ' · 默认' : ''}</span>
+               <div class="spacer"></div>
+               <button class="btn sm" onclick="sysCopyUrl('${esc(u)}')">复制</button>
+             </div>`;
+          }).join('') + '</div>';
+        }
+      }
+      const dpin = $('#deskPinInput');
+      if (dpin && st) dpin.value = st.desktopPin || st.pin || '';
+
       try {
         if (window.api && window.api.sysInfo) {
           const info = await window.api.sysInfo();
@@ -1632,6 +1702,29 @@
     try { await navigator.clipboard.writeText(url); toast('已复制 ' + url, 'ok'); }
     catch (e) { toast('复制失败，请手动选中地址复制', 'err'); }
   };
+  window.copyDeskUrl = async function () {
+    const el = $('#deskUrl');
+    const url = el ? (el.textContent || '').trim() : '';
+    if (!url) { toast('尚未获取到访问地址', 'err'); return; }
+    try { await navigator.clipboard.writeText(url); toast('已复制 ' + url, 'ok'); }
+    catch (e) { toast('复制失败，请手动选中地址复制', 'err'); }
+  };
+  /* 网页版系统设置里改「电脑网页版 PIN」——桌面端经 IPC 传 scope=desktop；
+   * 网页版自身经 desktop-api.js 的 mobileSetPin 也固定 scope=desktop，两者互不影响 PDA PIN。 */
+  window.saveDeskPin = async function () {
+    const el = $('#deskPinInput');
+    const pin = el ? (el.value || '').trim() : '';
+    if (!/^\d{4}$/.test(pin)) { toast('PIN 必须是 4 位数字', 'err'); return; }
+    try {
+      const isWeb = !!(window.desktopWeb);
+      let r;
+      if (isWeb && window.api && window.api.mobileSetPin) r = await window.api.mobileSetPin(pin);
+      else r = await window.api.invoke('mobile-set-pin', { pin: pin, scope: 'desktop' });
+      if (r && r.ok === false) { toast('保存失败：' + (r.error || '未知原因'), 'err'); return; }
+      toast('电脑网页版 PIN 已保存', 'ok');
+      if (window.loadSettings) window.loadSettings();
+    } catch (e) { toast('保存失败：' + e.message, 'err'); }
+  };
   window.openDataDirNow = async function () {
     try { await window.api.openDataDir(); }
     catch (e) { toast('打开失败：' + e.message, 'err'); }
@@ -1641,6 +1734,8 @@
   window.checkPortRule = async function () {
     const el = document.getElementById('sysPortRule');
     if (!el || !window.api || !window.api.sysPortCheck) return;
+    /* 网页版无法读取 Windows 防火墙，明确提示而非误报「未放行」 */
+    if (window.desktopWeb) { el.innerHTML = '<span class="muted">请在客户端查看</span>'; return; }
     try {
       const port = Number((((document.getElementById('sysPortInput')||{}).value)||'').trim()) || 8765;
       const r = await window.api.sysPortCheck(port);

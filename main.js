@@ -37,7 +37,7 @@ function createWindow() {
     height: 820,
     minWidth: 1024,
     minHeight: 700,
-    title: '备件仓库管理系统 v3.0.4',
+    title: '备件仓库管理系统 v3.0.5',
     backgroundColor: '#f1f5f9',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -90,8 +90,11 @@ const handlers = {
   'db-saveLocationAudit': (e, audit) => store.saveLocationAudit(audit),
   /* PDA 移动端：状态查询、修改 PIN、重启服务 */
   'mobile-status': () => mobileServer.status(),
-  'mobile-set-pin': (e, pin) => {
-    try { mobileServer.setPin(pin); return { ok: true, status: mobileServer.status() }; }
+  /* 兼容两种调用：旧版标量 pin（改 PDA PIN）/ 新版 { pin, scope }（scope='desktop' 改网页版 PIN） */
+  'mobile-set-pin': (e, payload) => {
+    const pin = (payload && typeof payload === 'object') ? payload.pin : payload;
+    const scope = (payload && typeof payload === 'object' && payload.scope) || 'pda';
+    try { mobileServer.setPin(pin, scope); return { ok: true, scope: scope, status: mobileServer.status() }; }
     catch (err) { return { ok: false, error: err.message, status: mobileServer.status() }; }
   },
   'mobile-restart': (e, port) => {
@@ -176,8 +179,10 @@ app.whenReady().then(() => {
     // 默认 8765；可用 SPMS_MOBILE_PORT 覆盖（多实例 / 自动化测试用，避免端口被占）
     port: Number(process.env.SPMS_MOBILE_PORT) || 8765,
     version: app.getVersion(),
+    dataDir: dataDir,
     onChange: (info) => {
-      if (!info || info.source !== 'mobile') return;
+      /* PDA 与电脑网页版任一侧写入，都通知桌面窗口刷新（同一份数据） */
+      if (!info || (info.source !== 'mobile' && info.source !== 'desktop')) return;
       BrowserWindow.getAllWindows().forEach((w) => {
         try { w.webContents.send('data-changed'); } catch (e) { /* 窗口已关闭 */ }
       });
