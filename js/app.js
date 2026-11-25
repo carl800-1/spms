@@ -540,6 +540,11 @@
         <div class="about-scroll">
           ${mb}
           <h3 class="about-h">变更日记</h3>
+          <h4 class="about-ver">v3.0.6</h4>
+          <ul class="about-list">
+            <li><strong>【修复】PDA 偶发「扫码无反应」</strong>：现场出现扫个别标签界面停在「等待扫码…」、退出重进才恢复的情况。排查确认扫码枪与数据均正常，根因在 PDA 网页前端——扫码框一旦失焦（软键盘弹出收起、误触页面），扫码枪键入直接打到页面上毫无反应；且未做输入法(IME)保护，Android 浏览器激活中文输入法时扫码内容进入组合输入状态、防抖检索拿到空关键字静默失败。本版为扫码框增加<strong>失焦自愈</strong>（焦点落空 300ms 后自动拉回，落在其它输入控件时不抢）与 <strong>IME 组合保护</strong>（组合期间不触发检索、组合结束立即检索），并补充从后台回前台时自动聚焦。</li>
+            <li>版本号升级至 <strong>3.0.6</strong>。</li>
+          </ul>
           <h4 class="about-ver">v3.0.5</h4>
           <ul class="about-list">
             <li><strong>【新增】电脑网页版访问</strong>：在局域网内的电脑浏览器打开 <code>http://本机IP:8765/pc</code>，即可用与客户端<strong>完全相同</strong>的界面和权限操作全部业务（备品、出入库、查询、库位、记录、数据备份），数据与客户端实时同步、无需安装。</li>

@@ -325,14 +325,37 @@
     $('loginBtn').onclick = doLogin;
     $('pin').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
 
+    /* 输入法(IME)保护：PDA 的 Android 浏览器若激活中文输入法，扫码枪键入的
+     * 内容会先进组合输入状态，此时 input.value 为空 / 不完整，600ms 防抖触发
+     * 检索时会拿到空关键字 → 界面静默恢复「等待扫码…」，看起来像「扫不出」。
+     * 组合期间跳过检索，组合结束（扫码内容真正上屏）后立即检索一次。 */
+    var composing = false;
+    $('scan').addEventListener('compositionstart', function () { composing = true; });
+    $('scan').addEventListener('compositionend', function () {
+      composing = false;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(search, 80);
+    });
     $('scan').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); clearTimeout(searchTimer); search(); }
     });
     $('scan').addEventListener('input', function () {
+      if (composing) return;
       clearTimeout(searchTimer);
       var v = $('scan').value.trim();
       if (!v) { clearPart(); hint('', ''); return; }
       searchTimer = setTimeout(search, 600);
+    });
+
+    /* 失焦自愈：#scan 失焦后扫码枪键入会直接打到页面上（界面停在「等待扫码…」
+     * 毫无反应，重进页面才能恢复）。焦点落在其它输入控件时不抢焦点；落空则拉回。 */
+    $('scan').addEventListener('blur', function () {
+      setTimeout(function () {
+        var ae = document.activeElement;
+        if (ae && (ae.id === 'scan' || ae.id === 'operator' || ae.id === 'qty' ||
+                   ae.id === 'remark' || ae.id === 'pin')) return;
+        try { $('scan').focus(); } catch (err) { /* 忽略 */ }
+      }, 300);
     });
 
     Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
@@ -358,7 +381,11 @@
     $('submit').onclick = submit;
 
     document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'visible' && !$('app').hidden) ping();
+      if (document.visibilityState === 'visible' && !$('app').hidden) {
+        ping();
+        /* 从后台回到前台时把扫码框拉回焦点，避免第一次扫码没反应 */
+        setTimeout(function () { try { $('scan').focus(); } catch (err) { /* 忽略 */ } }, 200);
+      }
     });
   }
 

@@ -37,7 +37,7 @@ function createWindow() {
     height: 820,
     minWidth: 1024,
     minHeight: 700,
-    title: '备件仓库管理系统 v3.0.5',
+    title: '备件仓库管理系统 v3.0.6',
     backgroundColor: '#f1f5f9',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

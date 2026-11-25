@@ -7,7 +7,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
-  version: '3.0.5',
+  version: '3.0.6',
   // 统一单 payload 转发，db.js 以此调用主进程 store.js
   invoke: (channel, payload) => ipcRenderer.invoke(channel, payload),
   // 打印标签：opts = { pageSize, copies }，返回 { ok, reason? }
