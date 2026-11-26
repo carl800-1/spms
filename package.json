@@ -1,7 +1,7 @@
 {
   "name": "spms",
-  "version": "3.0.6",
-  "description": "备件仓库管理系统 v3.0.6（Electron 桌面版，本地 JSON 文件存储，数据库置于程序同目录；支持 PDA 浏览器扫码出入库，主进程内置局域网 HTTP 服务；已移除夹具管理模块，回归纯备件仓库系统）",
+  "version": "3.0.7",
+  "description": "备件仓库管理系统 v3.0.7（Electron 桌面版，本地 JSON 文件存储，数据库置于程序同目录；支持 PDA 浏览器扫码出入库，主进程内置局域网 HTTP 服务；已移除夹具管理模块，回归纯备件仓库系统）",
   "main": "main.js",
   "private": true,
   "scripts": {
@@ -34,7 +34,7 @@
         "dir",
         "portable"
       ],
-      "artifactName": "备件仓库管理系统_v3.0.6.${ext}"
+      "artifactName": "备件仓库管理系统_v3.0.7.${ext}"
     }
   },
   "devDependencies": {

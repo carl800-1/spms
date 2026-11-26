@@ -358,6 +358,45 @@
       }, 300);
     });
 
+    /* 全局扫码兜底（v3.0.7）：熄屏再点亮等场景下焦点恢复不可靠（实测 v3.0.6 的
+     * 失焦自愈 + visibilitychange 聚焦仍会漏），扫码枪键入会散落在页面上。
+     * 扫码枪是高速键入（键间隔 <30ms），人工打字做不到——在 document 级捕获
+     * 「高速连续可打印字符 + 回车」特征序列，无论焦点在哪都组装出来按扫码处理。 */
+    var scanBuf = '', scanLastT = 0;
+    document.addEventListener('keydown', function (e) {
+      if ($('app').hidden) return;                       /* 未登录不处理 */
+      var t = e.target;
+      if (t === $('scan')) return;                       /* 焦点在扫码框走原有 input 流 */
+      if (t && t !== document.body && /INPUT|TEXTAREA|SELECT/.test(t.tagName)) return;
+      var now = Date.now();
+      if (now - scanLastT > 200) scanBuf = '';           /* 键间隔过大：重新累计 */
+      scanLastT = now;
+      if (e.key === 'Enter') {
+        if (scanBuf.length >= 4) {
+          var code = scanBuf;
+          scanBuf = '';
+          $('scan').value = code;                        /* 回填扫码框，界面可见可追溯 */
+          clearTimeout(searchTimer);
+          search();
+          e.preventDefault();
+        } else {
+          scanBuf = '';
+        }
+        return;
+      }
+      if (e.key && e.key.length === 1) scanBuf += e.key; /* 只累计可打印字符 */
+    });
+
+    /* 周期焦点保活：亮屏/解锁后浏览器焦点时序不可靠（visibilitychange 单次 focus
+     * 可能被系统夺回），每 2.5s 巡检一次——焦点不在任何输入控件时拉回扫码框。 */
+    setInterval(function () {
+      if (document.visibilityState !== 'visible' || $('app').hidden) return;
+      var ae = document.activeElement;
+      if (ae && (ae === $('scan') || ae.id === 'operator' || ae.id === 'qty' ||
+                 ae.id === 'remark' || ae.id === 'pin')) return;
+      try { $('scan').focus(); } catch (err) { /* 忽略 */ }
+    }, 2500);
+
     Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
       b.onclick = function () { setType(b.getAttribute('data-type')); };
     });

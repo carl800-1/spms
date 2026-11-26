@@ -10,7 +10,7 @@
  * app.js 无需修改。
  * ============================================================ */
 const DB = (function () {
-  const APP_VERSION = '3.0.6';
+  const APP_VERSION = '3.0.7';
   // Electron 运行时，preload.js 会通过 contextBridge 注入 window.api
   const electronApi = (typeof window !== 'undefined' && window.api) ? window.api : null;
 
